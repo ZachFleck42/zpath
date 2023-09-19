@@ -23,7 +23,10 @@ impl<'a> Waypoint<'a> {
     }
 
     fn print_DD(&self) {
-        println!("{:.6}, {:.6}", self.x, self.y)
+        println!(
+            "Waypoint {} is located at {:.6}, {:.6}",
+            self.label, self.x, self.y
+        )
     }
 
     fn print_DMS(&self) {
@@ -39,7 +42,26 @@ impl<'a> Waypoint<'a> {
         let long_seconds = (long_minutes - long_minutes.floor()) * 60.0;
         let long_direction = if self.y >= 0.0 { 'E' } else { 'W' };
 
-        println! {"{}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}", lat_degrees, lat_minutes.floor(), lat_seconds, lat_direction, long_degrees, long_minutes.floor(), long_seconds, long_direction}
+        println!(
+            "Waypoint {} is located at {}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}",
+            self.label,
+            lat_degrees,
+            lat_minutes.floor(),
+            lat_seconds,
+            lat_direction,
+            long_degrees,
+            long_minutes.floor(),
+            long_seconds,
+            long_direction
+        )
+    }
+
+    fn print_neighbors(&self) {
+        print!("Neighbors of waypoint {}:", self.label);
+        for neighbor in &self.neighbors {
+            print!(" {}", neighbor.label);
+        }
+        println!();
     }
 }
 
