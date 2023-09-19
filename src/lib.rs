@@ -41,6 +41,26 @@ impl<'a> Waypoint<'a> {
         EARTH_RADIUS * c
     }
 
+    fn find_neighbors(&mut self, dataset: &'a Dataset<'a>, amt: usize) {
+        let mut distances: Vec<(usize, f32)> = Vec::with_capacity(dataset.waypoints.len() - 1);
+
+        for (i, waypoint) in dataset.waypoints.iter().enumerate() {
+            if !std::ptr::eq(self, waypoint) {
+                let distance = self.distance_to(waypoint);
+                distances.push((i, distance));
+            }
+        }
+
+        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let mut nearest_neighbors = Vec::with_capacity(amt);
+        for (index, _) in distances.iter().take(amt) {
+            nearest_neighbors.push(&dataset.waypoints[*index]);
+        }
+
+        self.neighbors.extend(nearest_neighbors);
+    }
+
     fn print_DD(&self) {
         println!(
             "Waypoint {} is located at {:.6}, {:.6}",
@@ -116,20 +136,4 @@ fn generate_waypoints<'a>(amt: usize) -> Vec<Waypoint<'a>> {
     }
 
     waypoints
-}
-
-fn assign_neighbors(waypoints: &mut Vec<Waypoint>) {
-    for i in 0..waypoints.len() {
-        let mut distances: Vec<(usize, f32)> = Vec::new();
-
-        for j in 0..waypoints.len() {
-            if i != j {
-                let distance = waypoints[i].distance_to(&waypoints[j]);
-                distances.push((j, distance));
-            }
-        }
-
-        // Sort distances in ascending order
-        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-    }
 }
