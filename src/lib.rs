@@ -57,11 +57,11 @@ fn generate_label(n: usize) -> String {
     label
 }
 
-fn generate_waypoints<'a>(amt: isize) -> Vec<Waypoint<'a>> {
-    let mut waypoints = Vec::new();
+fn generate_waypoints<'a>(amt: usize) -> Vec<Waypoint<'a>> {
+    let mut waypoints = Vec::with_capacity(amt);
 
     for i in 0..amt {
-        let label = generate_label(i as usize);
+        let label = generate_label(i);
         let waypoint = Waypoint::new(label);
         waypoints.push(waypoint);
     }
