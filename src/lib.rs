@@ -74,6 +74,14 @@ impl Waypoint {
             lon_direction
         )
     }
+
+    fn print_connections(&self) {
+        print!("Connections to waypoint {}:", self.label);
+        for connection in &self.connections {
+            print!(" {}", connection);
+        }
+        println!();
+    }
 }
 
 impl Dataset {
