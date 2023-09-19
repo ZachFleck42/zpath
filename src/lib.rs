@@ -42,8 +42,8 @@ impl<'a> Waypoint<'a> {
     }
 
     fn find_neighbors(&mut self, dataset: &'a Dataset<'a>, amt: usize) {
+        // Iterate over every other waypoint in the dataset and calculate the distance (in km) to it
         let mut distances: Vec<(usize, f32)> = Vec::with_capacity(dataset.waypoints.len() - 1);
-
         for (i, waypoint) in dataset.waypoints.iter().enumerate() {
             if !std::ptr::eq(self, waypoint) {
                 let distance = self.distance_to(waypoint);
@@ -51,14 +51,11 @@ impl<'a> Waypoint<'a> {
             }
         }
 
+        // Sort the waypoints by distance and assign the closest 'amt' as neighbors
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-        let mut nearest_neighbors = Vec::with_capacity(amt);
         for (index, _) in distances.iter().take(amt) {
-            nearest_neighbors.push(&dataset.waypoints[*index]);
+            self.neighbors.push(&dataset.waypoints[*index]);
         }
-
-        self.neighbors.extend(nearest_neighbors);
     }
 
     fn print_DD(&self) {
