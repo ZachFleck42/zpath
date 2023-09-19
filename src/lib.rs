@@ -75,35 +75,36 @@ impl Waypoint {
 }
 
 impl Dataset {
-    fn new(name: String, size: usize) -> Self {
-        let waypoints = generate_waypoints(size);
+    fn new(&self, name: String, size: usize) -> Self {
+        let waypoints = Dataset::generate_waypoints(size);
 
         Dataset { name, waypoints }
     }
-}
 
-fn generate_label(n: usize) -> String {
-    let mut label = String::new();
-    let mut num = n;
+    // Generates sequential labels from AAA, AAB, AAC... to ZZZ
+    fn generate_waypoint_label(n: usize) -> String {
+        let mut label = String::new();
+        let mut num = n - 1;
 
-    while num > 0 {
-        let remainder = (num - 1) % 26;
-        let char_value = (remainder as u8 + b'A') as char;
-        label.insert(0, char_value);
-        num = (num - 1) / 26;
+        for _ in 0..3 {
+            let remainder = num % 26;
+            let char_value = (remainder as u8 + b'A') as char;
+            label.push(char_value);
+            num /= 26;
+        }
+
+        label.chars().rev().collect()
     }
 
-    label
-}
+    fn generate_waypoints(amt: usize) -> Vec<Waypoint> {
+        let mut waypoints = Vec::with_capacity(amt);
 
-fn generate_waypoints(amt: usize) -> Vec<Waypoint> {
-    let mut waypoints = Vec::with_capacity(amt);
+        for i in 1..=amt {
+            let label = Dataset::generate_waypoint_label(i);
+            let waypoint = Waypoint::new(label);
+            waypoints.push(waypoint);
+        }
 
-    for i in 1..=amt {
-        let label = generate_label(i);
-        let waypoint = Waypoint::new(label);
-        waypoints.push(waypoint);
+        waypoints
     }
-
-    waypoints
 }
