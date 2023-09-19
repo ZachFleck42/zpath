@@ -1,11 +1,11 @@
 #![allow(dead_code, non_snake_case, unused_variables)]
 use rand::Rng; // Used to randomly generate coordinates for waypoints
 
-// Waypoints have x and y components to represent latitude and longitude respectively
-// Latitude can range from -90 to 90 and longitude can range from -180 to 180
+const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
+
 struct Waypoint<'a> {
-    x: f32,
-    y: f32,
+    x: f32, // Latitude; can range from -90 to 90
+    y: f32, // Longitude; can range from -180 to 180
     label: String,
     neighbors: Vec<&'a Waypoint<'a>>,
 }
@@ -22,6 +22,20 @@ impl<'a> Waypoint<'a> {
         }
     }
 
+    // Use the Haversine formula to find the distance between self and another waypoint (in km)
+    fn distance_to(&self, dest: &Waypoint) -> f32 {
+        let lat1 = self.x.to_radians();
+        let lat2 = dest.x.to_radians();
+
+        let dlat = lat2 - lat1;
+        let dlon = dest.y.to_radians() - self.y.to_radians();
+
+        let a = (dlat / 2.0).sin().powi(2) + (dlon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
+        let c = 2.0 * a.sqrt().asin();
+
+        EARTH_RADIUS * c
+    }
+
     fn print_DD(&self) {
         println!(
             "Waypoint {} is located at {:.6}, {:.6}",
@@ -36,11 +50,11 @@ impl<'a> Waypoint<'a> {
         let lat_seconds = (lat_minutes - lat_minutes.floor()) * 60.0; // The decimal portion of minutes, times 60, equals seconds
         let lat_direction = if self.x >= 0.0 { 'N' } else { 'S' }; // Assign the cardinal direction based on sign
 
-        let long = self.y.abs();
-        let long_degrees = long.floor();
-        let long_minutes = (long - long_degrees) * 60.0;
-        let long_seconds = (long_minutes - long_minutes.floor()) * 60.0;
-        let long_direction = if self.y >= 0.0 { 'E' } else { 'W' };
+        let lon = self.y.abs();
+        let lon_degrees = lon.floor();
+        let lon_minutes = (lon - lon_degrees) * 60.0;
+        let lon_seconds = (lon_minutes - lon_minutes.floor()) * 60.0;
+        let lon_direction = if self.y >= 0.0 { 'E' } else { 'W' };
 
         println!(
             "Waypoint {} is located at {}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}",
@@ -49,10 +63,10 @@ impl<'a> Waypoint<'a> {
             lat_minutes.floor(),
             lat_seconds,
             lat_direction,
-            long_degrees,
-            long_minutes.floor(),
-            long_seconds,
-            long_direction
+            lon_degrees,
+            lon_minutes.floor(),
+            lon_seconds,
+            lon_direction
         )
     }
 
