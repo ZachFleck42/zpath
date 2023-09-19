@@ -10,6 +10,11 @@ struct Waypoint<'a> {
     neighbors: Vec<&'a Waypoint<'a>>,
 }
 
+struct Dataset<'a> {
+    name: String,
+    waypoints: Vec<Waypoint<'a>>,
+}
+
 impl<'a> Waypoint<'a> {
     fn new(label: String) -> Self {
         let mut rng = rand::thread_rng();
@@ -79,6 +84,14 @@ impl<'a> Waypoint<'a> {
     }
 }
 
+impl<'a> Dataset<'a> {
+    fn new(name: String, size: usize) -> Self {
+        let waypoints = generate_waypoints(size);
+
+        Dataset { name, waypoints }
+    }
+}
+
 fn generate_label(n: usize) -> String {
     let mut label = String::new();
     let mut num = n;
@@ -103,4 +116,20 @@ fn generate_waypoints<'a>(amt: usize) -> Vec<Waypoint<'a>> {
     }
 
     waypoints
+}
+
+fn assign_neighbors(waypoints: &mut Vec<Waypoint>) {
+    for i in 0..waypoints.len() {
+        let mut distances: Vec<(usize, f32)> = Vec::new();
+
+        for j in 0..waypoints.len() {
+            if i != j {
+                let distance = waypoints[i].distance_to(&waypoints[j]);
+                distances.push((j, distance));
+            }
+        }
+
+        // Sort distances in ascending order
+        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    }
 }
