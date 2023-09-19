@@ -1,21 +1,20 @@
 #![allow(dead_code, non_snake_case, unused_variables)]
-use rand::Rng; // Used to randomly generate coordinates for waypoints
+use rand::Rng;
 
 const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
 
-struct Waypoint<'a> {
+struct Waypoint {
     x: f32, // Latitude; can range from -90 to 90
     y: f32, // Longitude; can range from -180 to 180
     label: String,
-    neighbors: Vec<&'a Waypoint<'a>>,
 }
 
-struct Dataset<'a> {
+struct Dataset {
     name: String,
-    waypoints: Vec<Waypoint<'a>>,
+    waypoints: Vec<Waypoint>,
 }
 
-impl<'a> Waypoint<'a> {
+impl Waypoint {
     fn new(label: String) -> Self {
         let mut rng = rand::thread_rng();
 
@@ -23,7 +22,6 @@ impl<'a> Waypoint<'a> {
             x: rng.gen_range(-90.0..=90.0),
             y: rng.gen_range(-180.0..=180.0),
             label,
-            neighbors: Vec::new(),
         }
     }
 
@@ -39,23 +37,6 @@ impl<'a> Waypoint<'a> {
         let c = 2.0 * a.sqrt().asin();
 
         EARTH_RADIUS * c
-    }
-
-    fn find_neighbors(&mut self, dataset: &'a Dataset<'a>, amt: usize) {
-        // Iterate over every other waypoint in the dataset and calculate the distance (in km) to it
-        let mut distances: Vec<(usize, f32)> = Vec::with_capacity(dataset.waypoints.len() - 1);
-        for (i, waypoint) in dataset.waypoints.iter().enumerate() {
-            if !std::ptr::eq(self, waypoint) {
-                let distance = self.distance_to(waypoint);
-                distances.push((i, distance));
-            }
-        }
-
-        // Sort the waypoints by distance and assign the closest 'amt' as neighbors
-        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        for (index, _) in distances.iter().take(amt) {
-            self.neighbors.push(&dataset.waypoints[*index]);
-        }
     }
 
     fn print_DD(&self) {
@@ -91,17 +72,9 @@ impl<'a> Waypoint<'a> {
             lon_direction
         )
     }
-
-    fn print_neighbors(&self) {
-        print!("Neighbors of waypoint {}:", self.label);
-        for neighbor in &self.neighbors {
-            print!(" {}", neighbor.label);
-        }
-        println!();
-    }
 }
 
-impl<'a> Dataset<'a> {
+impl Dataset {
     fn new(name: String, size: usize) -> Self {
         let waypoints = generate_waypoints(size);
 
@@ -123,7 +96,7 @@ fn generate_label(n: usize) -> String {
     label
 }
 
-fn generate_waypoints<'a>(amt: usize) -> Vec<Waypoint<'a>> {
+fn generate_waypoints(amt: usize) -> Vec<Waypoint> {
     let mut waypoints = Vec::with_capacity(amt);
 
     for i in 1..=amt {
