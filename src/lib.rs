@@ -7,6 +7,7 @@ struct Waypoint {
     x: f32, // Latitude; can range from -90 to 90
     y: f32, // Longitude; can range from -180 to 180
     label: String,
+    connections: Vec<String>,
 }
 
 struct Dataset {
@@ -22,6 +23,7 @@ impl Waypoint {
             x: rng.gen_range(-90.0..=90.0),
             y: rng.gen_range(-180.0..=180.0),
             label,
+            connections: Vec::new(),
         }
     }
 
@@ -106,5 +108,29 @@ impl Dataset {
         }
 
         waypoints
+    }
+
+    fn assign_connections(&mut self, amt: usize) {
+        // For each waypoint in the dataset...
+        for i in 0..self.waypoints.len() {
+            let waypoint_1 = &self.waypoints[i];
+            let mut distances: Vec<(String, f32)> = Vec::with_capacity(self.waypoints.len() - 1);
+
+            // Determine the distance to every other waypoint in the dataset and store in the 'distances' vec
+            for j in 0..self.waypoints.len() {
+                if i != j {
+                    let waypoint_2 = &self.waypoints[j];
+                    let distance = waypoint_1.distance_to(waypoint_2);
+                    distances.push((waypoint_2.label.clone(), distance));
+                }
+            }
+
+            // Sort the vec from nearest to farthest and assign the nearest 'amt' as connections
+            distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            for j in 0..amt {
+                let connection_label = distances[j].0.clone();
+                self.waypoints[i].connections.push(connection_label)
+            }
+        }
     }
 }
