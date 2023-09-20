@@ -4,36 +4,30 @@ use rand::Rng;
 const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
 
 #[derive(Debug, Clone)]
-struct Connection {
-    label: String, // Label of the connected waypoint
-    distance: f32, // Distance to the waypoint
+struct Waypoint<'a> {
+    lat: f32,                           // Latitude; can range from -90 to 90
+    lon: f32,                           // Longitude; can range from -180 to 180
+    label: String,                      // Three-character label from AAA to ZZZ
+    connections: Vec<&'a Waypoint<'a>>, // Vector of references to connected waypoints
 }
 
-#[derive(Debug, Clone)]
-struct Waypoint {
-    lat: f32,                     // Latitude; can range from -90 to 90
-    lon: f32,                     // Longitude; can range from -180 to 180
-    label: String,                // Three-character label from AAA to ZZZ
-    connections: Vec<Connection>, // Vector of connected waypoints
-}
-
-struct Dataset {
+struct Dataset<'a> {
     name: String,
-    waypoints: Vec<Waypoint>,
+    waypoints: Vec<Waypoint<'a>>,
 }
 
 #[derive(Debug, Clone)]
-struct Node {
-    waypoint: Waypoint,
-    left: Option<Box<Node>>,
-    right: Option<Box<Node>>,
+struct KDTreeNode<'a> {
+    waypoint: &'a Waypoint<'a>,
+    left: Option<Box<KDTreeNode<'a>>>,
+    right: Option<Box<KDTreeNode<'a>>>,
 }
 
-struct KDTree {
-    root: Option<Box<Node>>,
+struct KDTree<'a> {
+    root: Option<Box<KDTreeNode<'a>>>,
 }
 
-impl Node {
+impl<'a> KDTreeNode<'a> {
     fn display(&self, depth: usize) {
         let indent = "  ".repeat(depth);
         println!(
@@ -53,14 +47,17 @@ impl Node {
     }
 }
 
-impl KDTree {
-    fn new(dataset: &Dataset) -> Self {
-        let mut waypoints = dataset.waypoints.clone();
+impl<'a> KDTree<'a> {
+    fn new(dataset: &'a Dataset<'a>) -> Self {
+        let mut waypoints: Vec<&'a Waypoint<'a>> = dataset.waypoints.iter().collect();
         let root = KDTree::build_kd_tree(&mut waypoints, 0);
         KDTree { root }
     }
 
-    fn build_kd_tree(waypoints: &mut Vec<Waypoint>, depth: usize) -> Option<Box<Node>> {
+    fn build_kd_tree(
+        waypoints: &mut [&'a Waypoint<'a>],
+        depth: usize,
+    ) -> Option<Box<KDTreeNode<'a>>> {
         if waypoints.is_empty() {
             return None;
         }
@@ -77,12 +74,12 @@ impl KDTree {
 
         let median_index = waypoints.len() / 2;
 
-        let median = waypoints.remove(median_index);
+        let median = waypoints[median_index];
 
-        Some(Box::new(Node {
+        Some(Box::new(KDTreeNode {
             waypoint: median,
-            left: KDTree::build_kd_tree(&mut waypoints[..median_index].to_vec(), depth + 1),
-            right: KDTree::build_kd_tree(&mut waypoints[median_index..].to_vec(), depth + 1),
+            left: KDTree::build_kd_tree(&mut waypoints[..median_index], depth + 1),
+            right: KDTree::build_kd_tree(&mut waypoints[median_index + 1..], depth + 1),
         }))
     }
 
@@ -95,7 +92,7 @@ impl KDTree {
     }
 }
 
-impl Waypoint {
+impl<'a> Waypoint<'a> {
     fn new(label: String) -> Self {
         let mut rng = rand::thread_rng();
 
@@ -154,17 +151,9 @@ impl Waypoint {
             lon_direction
         )
     }
-
-    fn print_connections(&self) {
-        print!("Connections to waypoint {} are:", self.label);
-        for connection in &self.connections {
-            println!("{}: {:.2}km", connection.label, connection.distance);
-        }
-        println!();
-    }
 }
 
-impl Dataset {
+impl<'a> Dataset<'a> {
     fn new(name: String, size: usize) -> Self {
         let waypoints = Dataset::generate_waypoints(size);
 
@@ -186,7 +175,7 @@ impl Dataset {
         label.chars().rev().collect()
     }
 
-    fn generate_waypoints(amt: usize) -> Vec<Waypoint> {
+    fn generate_waypoints(amt: usize) -> Vec<Waypoint<'a>> {
         let mut waypoints = Vec::with_capacity(amt);
 
         for i in 1..=amt {
@@ -199,7 +188,7 @@ impl Dataset {
     }
 
     // Builds a k-d tree from the dataset and then performs nearest-neighbor calculations using the tree.
-    // Time complexity of O(N * log N) to build plus O(N * log N) to query. Overall O(N * log N).
+    // Time complexity is O(N * log N) to build plus O(N * log N) to query all points. Overall O(N * log N).
     fn assign_connections_kdtree(&mut self, x: usize) {
         let tree = KDTree::new(&self);
 
@@ -207,47 +196,4 @@ impl Dataset {
             let waypoint = &self.waypoints[i];
         }
     }
-
-    // Checks every waypoint's distance to every other waypoint in the dataset, sorts by distance,
-    // and assigns the nearest x as connections. Time complexity of O(N^2 * log N).
-    fn assign_connections_naive(&mut self, x: usize) {
-        // For each waypoint in the dataset...
-        for i in 0..self.waypoints.len() {
-            let waypoint_1 = &self.waypoints[i];
-            let mut all_connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
-
-            // Determine the distance to every other waypoint in the dataset and store in the 'all_connections' vec
-            for j in 0..self.waypoints.len() {
-                if i != j {
-                    let waypoint_2 = &self.waypoints[j];
-                    all_connections.push(Connection {
-                        label: waypoint_2.label.clone(),
-                        distance: waypoint_1.distance_to(waypoint_2),
-                    });
-                }
-            }
-
-            // Sort connections from nearest to farthest and assign the nearest x as connections
-            all_connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-            for j in 0..x {
-                self.waypoints[i].connections.push(Connection {
-                    label: all_connections[j].label.clone(),
-                    distance: all_connections[j].distance,
-                })
-            }
-        }
-    }
 }
-
-// fn main() {
-//     let dataset_size = 1000;
-//     let dataset_name: String = "Bob".to_string();
-//     let dataset = Dataset::new(dataset_name, dataset_size);
-
-//     let kdtree = KDTree::new(&dataset);
-//     kdtree.display();
-
-//     let waypoint_AAA = &dataset.waypoints[0];
-//     println!("{}: ", waypoint_AAA.label);
-//     waypoint_AAA.print_DMS();
-// }
