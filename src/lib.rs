@@ -5,16 +5,16 @@ const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in cal
 
 #[derive(Debug, Clone)]
 struct Connection {
-    label: String,
-    distance: f32,
+    label: String, // Label of the connected waypoint
+    distance: f32, // Distance to the waypoint
 }
 
 #[derive(Debug, Clone)]
 struct Waypoint {
-    x: f32, // Latitude; can range from -90 to 90
-    y: f32, // Longitude; can range from -180 to 180
-    label: String,
-    connections: Vec<Connection>,
+    lat: f32,                     // Latitude; can range from -90 to 90
+    lon: f32,                     // Longitude; can range from -180 to 180
+    label: String,                // Three-character label from AAA to ZZZ
+    connections: Vec<Connection>, // Vector of connected waypoints
 }
 
 struct Dataset {
@@ -38,7 +38,7 @@ impl Node {
         let indent = "  ".repeat(depth);
         println!(
             "{}Waypoint ({:.6}, {:.6})",
-            indent, self.waypoint.x, self.waypoint.y
+            indent, self.waypoint.lat, self.waypoint.lon
         );
 
         if let Some(left) = &self.left {
@@ -69,9 +69,9 @@ impl KDTree {
 
         waypoints.sort_by(|a, b| {
             if dimension == 0 {
-                a.x.partial_cmp(&b.x).unwrap()
+                a.lat.partial_cmp(&b.lat).unwrap()
             } else {
-                a.y.partial_cmp(&b.y).unwrap()
+                a.lon.partial_cmp(&b.lon).unwrap()
             }
         });
 
@@ -100,8 +100,8 @@ impl Waypoint {
         let mut rng = rand::thread_rng();
 
         Waypoint {
-            x: rng.gen_range(-90.0..=90.0),
-            y: rng.gen_range(-180.0..=180.0),
+            lat: rng.gen_range(-90.0..=90.0),
+            lon: rng.gen_range(-180.0..=180.0),
             label,
             connections: Vec::new(),
         }
@@ -109,11 +109,11 @@ impl Waypoint {
 
     // Use the Haversine formula to find the distance between self and another waypoint (in km)
     fn distance_to(&self, dest: &Waypoint) -> f32 {
-        let lat1 = self.x.to_radians();
-        let lat2 = dest.x.to_radians();
+        let lat1 = self.lat.to_radians();
+        let lat2 = dest.lat.to_radians();
 
         let dlat = lat2 - lat1;
-        let dlon = dest.y.to_radians() - self.y.to_radians();
+        let dlon = dest.lon.to_radians() - self.lon.to_radians();
 
         let a = (dlat / 2.0).sin().powi(2) + (dlon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
         let c = 2.0 * a.sqrt().asin();
@@ -124,22 +124,22 @@ impl Waypoint {
     fn print_DD(&self) {
         println!(
             "Waypoint {} is located at {:.6}, {:.6}",
-            self.label, self.x, self.y
+            self.label, self.lat, self.lon
         )
     }
 
     fn print_DMS(&self) {
-        let lat = self.x.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
+        let lat = self.lat.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
         let lat_degrees = lat.floor(); // The whole number portion of the value equals degrees
         let lat_minutes = (lat - lat_degrees) * 60.0; // The decimal portion of the value, times 60, equals minutes
         let lat_seconds = (lat_minutes - lat_minutes.floor()) * 60.0; // The decimal portion of minutes, times 60, equals seconds
-        let lat_direction = if self.x >= 0.0 { 'N' } else { 'S' }; // Assign the cardinal direction based on sign
+        let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' }; // Assign the cardinal direction based on sign
 
-        let lon = self.y.abs();
+        let lon = self.lon.abs();
         let lon_degrees = lon.floor();
         let lon_minutes = (lon - lon_degrees) * 60.0;
         let lon_seconds = (lon_minutes - lon_minutes.floor()) * 60.0;
-        let lon_direction = if self.y >= 0.0 { 'E' } else { 'W' };
+        let lon_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
 
         println!(
             "Waypoint {} is located at {}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}",
@@ -239,10 +239,15 @@ impl Dataset {
     }
 }
 
-fn main() {
-    let dataset_size = 1000;
-    let dataset_name: String = "Bob".to_string();
-    let dataset = Dataset::new(dataset_name, dataset_size);
-    let kdtree = KDTree::new(&dataset);
-    kdtree.display();
-}
+// fn main() {
+//     let dataset_size = 1000;
+//     let dataset_name: String = "Bob".to_string();
+//     let dataset = Dataset::new(dataset_name, dataset_size);
+
+//     let kdtree = KDTree::new(&dataset);
+//     kdtree.display();
+
+//     let waypoint_AAA = &dataset.waypoints[0];
+//     println!("{}: ", waypoint_AAA.label);
+//     waypoint_AAA.print_DMS();
+// }
