@@ -3,11 +3,16 @@ use rand::Rng;
 
 const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
 
+struct Connection {
+    label: String,
+    distance: f32,
+}
+
 struct Waypoint {
     x: f32, // Latitude; can range from -90 to 90
     y: f32, // Longitude; can range from -180 to 180
     label: String,
-    connections: Vec<String>,
+    connections: Vec<Connection>,
 }
 
 struct Dataset {
@@ -76,16 +81,16 @@ impl Waypoint {
     }
 
     fn print_connections(&self) {
-        print!("Connections to waypoint {}:", self.label);
+        print!("Connections to waypoint {} are:", self.label);
         for connection in &self.connections {
-            print!(" {}", connection);
+            println!("{}: {:.2}km", connection.label, connection.distance);
         }
         println!();
     }
 }
 
 impl Dataset {
-    fn new(&self, name: String, size: usize) -> Self {
+    fn new(name: String, size: usize) -> Self {
         let waypoints = Dataset::generate_waypoints(size);
 
         Dataset { name, waypoints }
@@ -122,23 +127,37 @@ impl Dataset {
         // For each waypoint in the dataset...
         for i in 0..self.waypoints.len() {
             let waypoint_1 = &self.waypoints[i];
-            let mut distances: Vec<(String, f32)> = Vec::with_capacity(self.waypoints.len() - 1);
+            let mut connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
 
-            // Determine the distance to every other waypoint in the dataset and store in the 'distances' vec
+            // Determine the distance to every other waypoint in the dataset and store in the 'connections' vec
             for j in 0..self.waypoints.len() {
                 if i != j {
                     let waypoint_2 = &self.waypoints[j];
+                    let label = waypoint_2.label.clone();
                     let distance = waypoint_1.distance_to(waypoint_2);
-                    distances.push((waypoint_2.label.clone(), distance));
+
+                    connections.push(Connection { label, distance });
                 }
             }
 
             // Sort the vec from nearest to farthest and assign the nearest 'amt' as connections
-            distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
             for j in 0..amt {
-                let connection_label = distances[j].0.clone();
-                self.waypoints[i].connections.push(connection_label)
+                self.waypoints[i].connections.push(Connection {
+                    label: connections[j].label.clone(),
+                    distance: connections[j].distance,
+                })
             }
         }
     }
 }
+
+// fn main() {
+//     let name: String = "Bob".to_string();
+//     let size = 1000;
+//     let mut thing = Dataset::new(name, size);
+//     thing.assign_connections(4);
+
+//     thing.waypoints[0].print_DMS();
+//     thing.waypoints[0].print_connections();
+// }
