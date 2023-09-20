@@ -198,7 +198,19 @@ impl Dataset {
         waypoints
     }
 
-    fn assign_connections_naive(&mut self, amt: usize) {
+    // Builds a k-d tree from the dataset and then performs nearest-neighbor calculations using the tree.
+    // Time complexity of O(N * log N) to build plus O(N * log N) to query. Overall O(N * log N).
+    fn assign_connections_kdtree(&mut self, x: usize) {
+        let tree = KDTree::new(&self);
+
+        for i in 0..self.waypoints.len() {
+            let waypoint = &self.waypoints[i];
+        }
+    }
+
+    // Checks every waypoint's distance to every other waypoint in the dataset, sorts by distance,
+    // and assigns the nearest x as connections. Time complexity of O(N^2 * log N).
+    fn assign_connections_naive(&mut self, x: usize) {
         // For each waypoint in the dataset...
         for i in 0..self.waypoints.len() {
             let waypoint_1 = &self.waypoints[i];
@@ -215,9 +227,9 @@ impl Dataset {
                 }
             }
 
-            // Sort connections from nearest to farthest and assign the nearest x as connections, where x = 'amt'
+            // Sort connections from nearest to farthest and assign the nearest x as connections
             all_connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-            for j in 0..amt {
+            for j in 0..x {
                 self.waypoints[i].connections.push(Connection {
                     label: all_connections[j].label.clone(),
                     distance: all_connections[j].distance,
@@ -225,4 +237,12 @@ impl Dataset {
             }
         }
     }
+}
+
+fn main() {
+    let dataset_size = 1000;
+    let dataset_name: String = "Bob".to_string();
+    let dataset = Dataset::new(dataset_name, dataset_size);
+    let kdtree = KDTree::new(&dataset);
+    kdtree.display();
 }
