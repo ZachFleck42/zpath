@@ -3,11 +3,13 @@ use rand::Rng;
 
 const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
 
+#[derive(Debug, Clone)]
 struct Connection {
     label: String,
     distance: f32,
 }
 
+#[derive(Debug, Clone)]
 struct Waypoint {
     x: f32, // Latitude; can range from -90 to 90
     y: f32, // Longitude; can range from -180 to 180
@@ -18,6 +20,79 @@ struct Waypoint {
 struct Dataset {
     name: String,
     waypoints: Vec<Waypoint>,
+}
+
+#[derive(Debug, Clone)]
+struct Node {
+    waypoint: Waypoint,
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+}
+
+struct KDTree {
+    root: Option<Box<Node>>,
+}
+
+impl Node {
+    fn display(&self, depth: usize) {
+        let indent = "  ".repeat(depth);
+        println!(
+            "{}Waypoint ({:.6}, {:.6})",
+            indent, self.waypoint.x, self.waypoint.y
+        );
+
+        if let Some(left) = &self.left {
+            println!("{}Left:", indent);
+            left.display(depth + 1);
+        }
+
+        if let Some(right) = &self.right {
+            println!("{}Right:", indent);
+            right.display(depth + 1);
+        }
+    }
+}
+
+impl KDTree {
+    fn new(dataset: &Dataset) -> Self {
+        let mut waypoints = dataset.waypoints.clone();
+        let root = KDTree::build_kd_tree(&mut waypoints, 0);
+        KDTree { root }
+    }
+
+    fn build_kd_tree(waypoints: &mut Vec<Waypoint>, depth: usize) -> Option<Box<Node>> {
+        if waypoints.is_empty() {
+            return None;
+        }
+
+        let dimension = depth % 2;
+
+        waypoints.sort_by(|a, b| {
+            if dimension == 0 {
+                a.x.partial_cmp(&b.x).unwrap()
+            } else {
+                a.y.partial_cmp(&b.y).unwrap()
+            }
+        });
+
+        let median_index = waypoints.len() / 2;
+
+        let median = waypoints.remove(median_index);
+
+        Some(Box::new(Node {
+            waypoint: median,
+            left: KDTree::build_kd_tree(&mut waypoints[..median_index].to_vec(), depth + 1),
+            right: KDTree::build_kd_tree(&mut waypoints[median_index..].to_vec(), depth + 1),
+        }))
+    }
+
+    fn display(&self) {
+        if let Some(root) = &self.root {
+            root.display(0);
+        } else {
+            println!("KD Tree is empty.");
+        }
+    }
 }
 
 impl Waypoint {
