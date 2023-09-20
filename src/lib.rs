@@ -123,41 +123,31 @@ impl Dataset {
         waypoints
     }
 
-    fn assign_connections(&mut self, amt: usize) {
+    fn assign_connections_naive(&mut self, amt: usize) {
         // For each waypoint in the dataset...
         for i in 0..self.waypoints.len() {
             let waypoint_1 = &self.waypoints[i];
-            let mut connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
+            let mut all_connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
 
-            // Determine the distance to every other waypoint in the dataset and store in the 'connections' vec
+            // Determine the distance to every other waypoint in the dataset and store in the 'all_connections' vec
             for j in 0..self.waypoints.len() {
                 if i != j {
                     let waypoint_2 = &self.waypoints[j];
-                    let label = waypoint_2.label.clone();
-                    let distance = waypoint_1.distance_to(waypoint_2);
-
-                    connections.push(Connection { label, distance });
+                    all_connections.push(Connection {
+                        label: waypoint_2.label.clone(),
+                        distance: waypoint_1.distance_to(waypoint_2),
+                    });
                 }
             }
 
-            // Sort the vec from nearest to farthest and assign the nearest 'amt' as connections
-            connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+            // Sort connections from nearest to farthest and assign the nearest x as connections, where x = 'amt'
+            all_connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
             for j in 0..amt {
                 self.waypoints[i].connections.push(Connection {
-                    label: connections[j].label.clone(),
-                    distance: connections[j].distance,
+                    label: all_connections[j].label.clone(),
+                    distance: all_connections[j].distance,
                 })
             }
         }
     }
 }
-
-// fn main() {
-//     let name: String = "Bob".to_string();
-//     let size = 1000;
-//     let mut thing = Dataset::new(name, size);
-//     thing.assign_connections(4);
-
-//     thing.waypoints[0].print_DMS();
-//     thing.waypoints[0].print_connections();
-// }
