@@ -1,26 +1,28 @@
 #![allow(dead_code, non_snake_case, unused_variables)]
+
 use rand::Rng;
+use std::cell::RefCell;
 use std::rc::Rc;
 
-const EARTH_RADIUS: f32 = 6378.137; // Earth's radius in kilometers. Used in calculating distance between waypoints
+const EARTH_RADIUS: f32 = 6378.137;
 
 #[derive(Debug, Clone)]
 struct Waypoint {
-    lat: f32,      // Latitude; can range from -90 to 90
-    lon: f32,      // Longitude; can range from -180 to 180
-    label: String, // Three-character label from AAA to ZZZ
+    lat: f32,
+    lon: f32,
+    label: String,
     connections: Vec<Connection>,
 }
 
 #[derive(Debug, Clone)]
 struct Connection {
-    waypoint: Rc<Waypoint>,
+    waypoint: Rc<RefCell<Waypoint>>,
     distance: f32,
 }
 
 #[derive(Debug, Clone)]
 struct KDTreeNode {
-    waypoint: Rc<Waypoint>,
+    waypoint: Rc<RefCell<Waypoint>>,
     left: Option<Box<KDTreeNode>>,
     right: Option<Box<KDTreeNode>>,
 }
@@ -31,7 +33,7 @@ struct KDTree {
 
 struct Dataset {
     name: String,
-    waypoints: Vec<Rc<Waypoint>>,
+    waypoints: Vec<Rc<RefCell<Waypoint>>>,
     kd_tree: Option<KDTree>,
 }
 
@@ -98,7 +100,9 @@ impl KDTreeNode {
         let indent = "  ".repeat(depth);
         println!(
             "{}Waypoint ({:.6}, {:.6})",
-            indent, self.waypoint.lat, self.waypoint.lon
+            indent,
+            self.waypoint.borrow().lat,
+            self.waypoint.borrow().lon
         );
 
         if let Some(left) = &self.left {
@@ -114,12 +118,15 @@ impl KDTreeNode {
 }
 
 impl KDTree {
-    fn new(waypoints: &mut Vec<Rc<Waypoint>>) -> Self {
+    fn new(waypoints: &mut Vec<Rc<RefCell<Waypoint>>>) -> Self {
         let root = KDTree::build_kd_tree(waypoints, 0);
         KDTree { root }
     }
 
-    fn build_kd_tree(waypoints: &mut [Rc<Waypoint>], depth: usize) -> Option<Box<KDTreeNode>> {
+    fn build_kd_tree(
+        waypoints: &mut [Rc<RefCell<Waypoint>>],
+        depth: usize,
+    ) -> Option<Box<KDTreeNode>> {
         if waypoints.is_empty() {
             return None;
         }
@@ -128,9 +135,9 @@ impl KDTree {
 
         waypoints.sort_by(|a, b| {
             if dimension == 0 {
-                a.lat.partial_cmp(&b.lat).unwrap()
+                a.borrow().lat.partial_cmp(&b.borrow().lat).unwrap()
             } else {
-                a.lon.partial_cmp(&b.lon).unwrap()
+                a.borrow().lon.partial_cmp(&b.borrow().lon).unwrap()
             }
         });
 
@@ -178,12 +185,12 @@ impl Dataset {
         label.chars().rev().collect()
     }
 
-    fn generate_waypoints(amt: usize) -> Vec<Rc<Waypoint>> {
+    fn generate_waypoints(amt: usize) -> Vec<Rc<RefCell<Waypoint>>> {
         let mut waypoints = Vec::with_capacity(amt);
 
         for i in 1..=amt {
             let label = Dataset::generate_waypoint_label(i);
-            let waypoint = Rc::new(Waypoint::new(label));
+            let waypoint = Rc::new(RefCell::new(Waypoint::new(label)));
             waypoints.push(waypoint);
         }
 
@@ -191,7 +198,8 @@ impl Dataset {
     }
 
     fn generate_kd_tree(&mut self) {
-        let mut cloned_waypoint_refs: Vec<Rc<Waypoint>> = self.waypoints.iter().cloned().collect();
+        let mut cloned_waypoint_refs: Vec<Rc<RefCell<Waypoint>>> =
+            self.waypoints.iter().cloned().collect();
         self.kd_tree = Some(KDTree::new(&mut cloned_waypoint_refs));
     }
 
@@ -202,4 +210,17 @@ impl Dataset {
             println!("A k-d tree has not yet been generated for this dataset.");
         }
     }
+}
+
+fn main() {
+    use std::time::Instant;
+    let now = Instant::now();
+
+    let mut dataset = Dataset::new("Bob".to_string(), 1000);
+    let kd_tree = dataset.generate_kd_tree();
+    let elapsed = now.elapsed();
+    // dataset.print_kd_tree();
+
+    // println!();
+    println!("Elapsed: {:.2?}", elapsed);
 }
