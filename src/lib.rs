@@ -18,11 +18,6 @@ struct Connection {
     distance: f32,
 }
 
-struct Dataset {
-    name: String,
-    waypoints: Vec<Rc<Waypoint>>,
-}
-
 #[derive(Debug, Clone)]
 struct KDTreeNode {
     waypoint: Rc<Waypoint>,
@@ -32,6 +27,12 @@ struct KDTreeNode {
 
 struct KDTree {
     root: Option<Box<KDTreeNode>>,
+}
+
+struct Dataset {
+    name: String,
+    waypoints: Vec<Rc<Waypoint>>,
+    kd_tree: Option<KDTree>,
 }
 
 impl Waypoint {
@@ -113,9 +114,8 @@ impl KDTreeNode {
 }
 
 impl KDTree {
-    fn new(dataset: &Dataset) -> Self {
-        let mut waypoints: Vec<Rc<Waypoint>> = dataset.waypoints.iter().cloned().collect();
-        let root = KDTree::build_kd_tree(&mut waypoints, 0);
+    fn new(waypoints: &mut Vec<Rc<Waypoint>>) -> Self {
+        let root = KDTree::build_kd_tree(waypoints, 0);
         KDTree { root }
     }
 
@@ -148,7 +148,7 @@ impl KDTree {
         if let Some(root) = &self.root {
             root.display(0);
         } else {
-            println!("KD Tree is empty.");
+            println!("k-d tree is empty.");
         }
     }
 }
@@ -157,7 +157,11 @@ impl Dataset {
     fn new(name: String, size: usize) -> Self {
         let waypoints = Dataset::generate_waypoints(size);
 
-        Dataset { name, waypoints }
+        Dataset {
+            name,
+            waypoints,
+            kd_tree: None,
+        }
     }
 
     fn generate_waypoint_label(n: usize) -> String {
@@ -173,6 +177,7 @@ impl Dataset {
 
         label.chars().rev().collect()
     }
+
     fn generate_waypoints(amt: usize) -> Vec<Rc<Waypoint>> {
         let mut waypoints = Vec::with_capacity(amt);
 
@@ -183,5 +188,18 @@ impl Dataset {
         }
 
         waypoints
+    }
+
+    fn generate_kd_tree(&mut self) {
+        let mut cloned_waypoint_refs: Vec<Rc<Waypoint>> = self.waypoints.iter().cloned().collect();
+        self.kd_tree = Some(KDTree::new(&mut cloned_waypoint_refs));
+    }
+
+    fn print_kd_tree(&self) {
+        if let Some(tree) = &self.kd_tree {
+            tree.print();
+        } else {
+            println!("A k-d tree has not yet been generated for this dataset.");
+        }
     }
 }
