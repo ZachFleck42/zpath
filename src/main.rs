@@ -63,6 +63,20 @@ impl Waypoint {
         EARTH_RADIUS * c
     }
 
+    fn generate_label(n: usize) -> String {
+        let mut label = String::new();
+        let mut num = n - 1;
+
+        for _ in 0..3 {
+            let remainder = num % 26;
+            let char_value = (remainder as u8 + b'A') as char;
+            label.push(char_value);
+            num /= 26;
+        }
+
+        label.chars().rev().collect()
+    }
+
     fn convert_to_DMS(coord: f32, direction: char) -> String {
         let abs_coord = coord.abs();
         let degrees = abs_coord.floor();
@@ -171,25 +185,11 @@ impl Dataset {
         }
     }
 
-    fn generate_waypoint_label(n: usize) -> String {
-        let mut label = String::new();
-        let mut num = n - 1;
-
-        for _ in 0..3 {
-            let remainder = num % 26;
-            let char_value = (remainder as u8 + b'A') as char;
-            label.push(char_value);
-            num /= 26;
-        }
-
-        label.chars().rev().collect()
-    }
-
     fn generate_waypoints(amt: usize) -> Vec<Rc<RefCell<Waypoint>>> {
         let mut waypoints = Vec::with_capacity(amt);
 
         for i in 1..=amt {
-            let label = Dataset::generate_waypoint_label(i);
+            let label = Waypoint::generate_label(i);
             let waypoint = Rc::new(RefCell::new(Waypoint::new(label)));
             waypoints.push(waypoint);
         }
@@ -216,11 +216,11 @@ fn main() {
     use std::time::Instant;
     let now = Instant::now();
 
-    let mut dataset = Dataset::new("Bob".to_string(), 1000);
+    let mut dataset = Dataset::new("Bob".to_string(), 100);
     let kd_tree = dataset.generate_kd_tree();
     let elapsed = now.elapsed();
-    // dataset.print_kd_tree();
+    dataset.print_kd_tree();
 
-    // println!();
-    println!("Elapsed: {:.2?}", elapsed);
+    println!();
+    println!("Elapsed time: {:.2?}", elapsed);
 }
