@@ -27,6 +27,64 @@ struct KDTree<'a> {
     root: Option<Box<KDTreeNode<'a>>>,
 }
 
+impl<'a> Waypoint<'a> {
+    fn new(label: String) -> Self {
+        let mut rng = rand::thread_rng();
+
+        Waypoint {
+            lat: rng.gen_range(-90.0..=90.0),
+            lon: rng.gen_range(-180.0..=180.0),
+            label,
+            connections: Vec::new(),
+        }
+    }
+
+    // Use the Haversine formula to find the distance between self and another waypoint (in km)
+    fn distance_to(&self, dest: &Waypoint) -> f32 {
+        let lat1 = self.lat.to_radians();
+        let lat2 = dest.lat.to_radians();
+
+        let dlat = lat2 - lat1;
+        let dlon = dest.lon.to_radians() - self.lon.to_radians();
+
+        let a = (dlat / 2.0).sin().powi(2) + (dlon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
+        let c = 2.0 * a.sqrt().asin();
+
+        EARTH_RADIUS * c
+    }
+
+    fn print(&self) {
+        println!("Waypoint {}: {:.6}, {:.6}", self.label, self.lat, self.lon)
+    }
+
+    fn convert_to_DMS(coord: f32, direction: char) -> String {
+        let abs_coord = coord.abs();
+        let degrees = abs_coord.floor();
+        let minutes = (abs_coord - degrees) * 60.0;
+        let seconds = (minutes - minutes.floor()) * 60.0;
+
+        format!(
+            "{}°{}'{:.2}\"{}",
+            degrees,
+            minutes.floor(),
+            seconds,
+            direction
+        )
+    }
+
+    fn print_DMS(&self) {
+        let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' };
+        let lon_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
+
+        println!(
+            "Waypoint {} is located at {}, {}",
+            self.label,
+            Waypoint::convert_to_DMS(self.lat, lat_direction),
+            Waypoint::convert_to_DMS(self.lon, lon_direction)
+        );
+    }
+}
+
 impl<'a> KDTreeNode<'a> {
     fn display(&self, depth: usize) {
         let indent = "  ".repeat(depth);
@@ -89,67 +147,6 @@ impl<'a> KDTree<'a> {
         } else {
             println!("KD Tree is empty.");
         }
-    }
-}
-
-impl<'a> Waypoint<'a> {
-    fn new(label: String) -> Self {
-        let mut rng = rand::thread_rng();
-
-        Waypoint {
-            lat: rng.gen_range(-90.0..=90.0),
-            lon: rng.gen_range(-180.0..=180.0),
-            label,
-            connections: Vec::new(),
-        }
-    }
-
-    // Use the Haversine formula to find the distance between self and another waypoint (in km)
-    fn distance_to(&self, dest: &Waypoint) -> f32 {
-        let lat1 = self.lat.to_radians();
-        let lat2 = dest.lat.to_radians();
-
-        let dlat = lat2 - lat1;
-        let dlon = dest.lon.to_radians() - self.lon.to_radians();
-
-        let a = (dlat / 2.0).sin().powi(2) + (dlon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
-        let c = 2.0 * a.sqrt().asin();
-
-        EARTH_RADIUS * c
-    }
-
-    fn print_DD(&self) {
-        println!(
-            "Waypoint {} is located at {:.6}, {:.6}",
-            self.label, self.lat, self.lon
-        )
-    }
-
-    fn print_DMS(&self) {
-        let lat = self.lat.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
-        let lat_degrees = lat.floor(); // The whole number portion of the value equals degrees
-        let lat_minutes = (lat - lat_degrees) * 60.0; // The decimal portion of the value, times 60, equals minutes
-        let lat_seconds = (lat_minutes - lat_minutes.floor()) * 60.0; // The decimal portion of minutes, times 60, equals seconds
-        let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' }; // Assign the cardinal direction based on sign
-
-        let lon = self.lon.abs();
-        let lon_degrees = lon.floor();
-        let lon_minutes = (lon - lon_degrees) * 60.0;
-        let lon_seconds = (lon_minutes - lon_minutes.floor()) * 60.0;
-        let lon_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
-
-        println!(
-            "Waypoint {} is located at {}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}",
-            self.label,
-            lat_degrees,
-            lat_minutes.floor(),
-            lat_seconds,
-            lat_direction,
-            lon_degrees,
-            lon_minutes.floor(),
-            lon_seconds,
-            lon_direction
-        )
     }
 }
 
