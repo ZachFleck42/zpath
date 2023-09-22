@@ -50,12 +50,14 @@ impl Waypoint {
     }
 
     // Use the Haversine formula to find the distance between self and another waypoint (in km)
-    fn distance_to(&self, dest: &Waypoint) -> f32 {
+    fn distance_to(&self, target: Rc<RefCell<Waypoint>>) -> f32 {
+        let target_waypoint = target.borrow();
+
         let lat1 = self.lat.to_radians();
-        let lat2 = dest.lat.to_radians();
+        let lat2 = target_waypoint.lat.to_radians();
 
         let dlat = lat2 - lat1;
-        let dlon = dest.lon.to_radians() - self.lon.to_radians();
+        let dlon = target_waypoint.lon.to_radians() - self.lon.to_radians();
 
         let a = (dlat / 2.0).sin().powi(2) + (dlon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
         let c = 2.0 * a.sqrt().asin();
@@ -92,6 +94,17 @@ impl Waypoint {
         )
     }
 
+    fn print_connections(&self) {
+        println!("Connections to waypoint {}: ", self.label);
+        for connection in &self.connections {
+            println!(
+                "    {}: {:.2}km away",
+                connection.waypoint.borrow().label,
+                connection.distance
+            );
+        }
+    }
+
     fn print_DMS(&self) {
         let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' };
         let lon_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
@@ -112,11 +125,10 @@ impl Waypoint {
 impl KDTreeNode {
     fn display(&self, depth: usize) {
         let indent = "  ".repeat(depth);
+        let waypoint = self.waypoint.borrow();
         println!(
-            "{}Waypoint ({:.6}, {:.6})",
-            indent,
-            self.waypoint.borrow().lat,
-            self.waypoint.borrow().lon
+            "{}Waypoint {}: ({:.6}, {:.6})",
+            indent, waypoint.label, waypoint.lat, waypoint.lon
         );
 
         if let Some(left) = &self.left {
@@ -210,17 +222,49 @@ impl Dataset {
             println!("A k-d tree has not yet been generated for this dataset.");
         }
     }
+
+    // Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
+    // to every other waypoint, sorts distances, and assigns closest 'amt' as connections. O(N^2 * Log N) time complexity.
+    fn assign_connections_naive(&mut self, amt: usize) {
+        // For each waypoint in the dataset...
+        for i in 0..self.waypoints.len() {
+            let mut source_waypoint = self.waypoints[i].borrow_mut();
+            let mut connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
+
+            // Determine the distance to every other waypoint in the dataset and store in the 'all_connections' vec
+            for j in 0..self.waypoints.len() {
+                if i != j {
+                    let target_waypoint = &self.waypoints[j];
+                    connections.push(Connection {
+                        waypoint: target_waypoint.clone(),
+                        distance: source_waypoint.distance_to(target_waypoint.clone()),
+                    })
+                }
+            }
+
+            // Sort connections from nearest to furthest and assign the nearest 'amt' as connections
+            connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+            for j in 0..amt {
+                source_waypoint.connections.push(connections[j].clone())
+            }
+        }
+    }
 }
 
 fn main() {
-    use std::time::Instant;
-    let now = Instant::now();
+    // use std::time::Instant;
+    // let now = Instant::now();
+    // let elapsed = now.elapsed();
 
-    let mut dataset = Dataset::new("Bob".to_string(), 100);
+    let mut dataset = Dataset::new("Bob".to_string(), 1000);
+
     let kd_tree = dataset.generate_kd_tree();
-    let elapsed = now.elapsed();
     dataset.print_kd_tree();
 
     println!();
-    println!("Elapsed time: {:.2?}", elapsed);
+
+    dataset.assign_connections_naive(10);
+    dataset.waypoints[0].borrow().print_connections();
+
+    // println!("Elapsed time: {:.2?}", elapsed);
 }
