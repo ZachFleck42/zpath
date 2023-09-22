@@ -1,16 +1,19 @@
 #![allow(dead_code, non_snake_case, unused_variables)]
 
 use rand::Rng;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
 const EARTH_RADIUS: f32 = 6378.137;
+const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
 
 #[derive(Debug, Clone)]
 struct Waypoint {
     lat: f32,
     lon: f32,
     label: String,
+    geohash: String,
     connections: Vec<Connection>,
 }
 
@@ -26,18 +29,7 @@ struct Dataset {
 }
 
 impl Waypoint {
-    fn new(label: String) -> Self {
-        let mut rng = rand::thread_rng();
-
-        Waypoint {
-            lat: rng.gen_range(-90.0..=90.0),
-            lon: rng.gen_range(-180.0..=180.0),
-            label,
-            connections: Vec::new(),
-        }
-    }
-
-    // Use the Haversine formula to find the distance between self and another waypoint (in km)
+    /// Implements the Haversine formula to find the distance between self and another waypoint (in km)
     fn distance_to(&self, target: Rc<RefCell<Waypoint>>) -> f32 {
         let target_waypoint = target.borrow();
 
@@ -53,60 +45,99 @@ impl Waypoint {
         EARTH_RADIUS * c
     }
 
-    fn generate_label(n: usize) -> String {
+    /// Generates a sequential three-character label, from 'AAA' to 'AAB' to 'ZZZ', based on the passed-in value 'n'.
+    fn generate_label(mut n: usize) -> String {
         let mut label = String::new();
-        let mut num = n - 1;
 
         for _ in 0..3 {
-            let remainder = num % 26;
+            let remainder = n % 26;
             let char_value = (remainder as u8 + b'A') as char;
             label.push(char_value);
-            num /= 26;
+            n /= 26;
         }
 
         label.chars().rev().collect()
     }
 
-    fn convert_to_DMS(coord: f32, direction: char) -> String {
-        let abs_coord = coord.abs();
-        let degrees = abs_coord.floor();
-        let minutes = (abs_coord - degrees) * 60.0;
-        let seconds = (minutes - minutes.floor()) * 60.0;
+    /// Builds a geohash String from the provided coordinates
+    fn encode_geohash(lat: f32, lon: f32, precision: usize) -> String {
+        // We will be building the geohash character by character
+        let mut geohash = Vec::with_capacity(precision);
+
+        // Initialize latitude and longitude mins / maxes to the entire range of Earth
+        // These values will change as we subdivide the Earth into smaller and smaller pieces
+        let (mut lat_min, mut lat_max) = (-90.0, 90.0);
+        let (mut lon_min, mut lon_max) = (-180.0, 180.0);
+
+        let mut bits = 0; // The 5 binary bits used to determine which base32 char to append next; initially '00000'
+        let mut bit = 0; // Which digit in 'bits' we are currently assigning (from least significant to most)
+        let mut flip = true; // Alternates between true / false to switch between assigning bits based on lat / lon
+
+        while geohash.len() < precision {
+            let midpoint;
+
+            // Determine whether or not the current digit in bits should be a '0' or '1' and assign appropriately
+            if flip {
+                midpoint = (lon_min + lon_max) / 2.0;
+
+                if lon > midpoint {
+                    bits |= 1 << (4 - bit);
+                    lon_min = midpoint;
+                } else {
+                    lon_max = midpoint;
+                }
+            } else {
+                midpoint = (lat_min + lat_max) / 2.0;
+
+                if lat > midpoint {
+                    bits |= 1 << (4 - bit);
+                    lat_min = midpoint;
+                } else {
+                    lat_max = midpoint;
+                }
+            }
+
+            // Once 'bits' has all five bits populated, we can translate the constructed binary number into base32
+            // Otherwise, move to the next bit in bits and repeat until full
+            if bit == 4 {
+                geohash.push(BASE_32GHS[bits]); // Push the appropriate 32ghs char to the end of the geohash
+                bits = 0; // Reset bits back to 00000
+                bit = 0; // Reset bit back to least significant digit in bits
+            } else {
+                bit += 1;
+            }
+
+            flip = !flip;
+        }
+
+        String::from_utf8(geohash).expect("Invalid UTF-8")
+    }
+
+    /// Returns a String of the Waypoint's coordinates in Degrees/Minutes/Seconds (DMS) format
+    fn get_DMS(&self) -> String {
+        let lat = self.lat.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
+        let lat_degrees = lat.floor(); // The whole number portion of the value equals degrees
+        let lat_minutes = (lat - lat_degrees) * 60.0; // The decimal portion of the value, times 60, equals minutes
+        let lat_seconds = (lat_minutes - lat_minutes.floor()) * 60.0; // The decimal portion of minutes, times 60, equals seconds
+        let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' }; // Assign the cardinal direction based on sign
+
+        let long = self.lon.abs();
+        let long_degrees = long.floor();
+        let long_minutes = (long - long_degrees) * 60.0;
+        let long_seconds = (long_minutes - long_minutes.floor()) * 60.0;
+        let long_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
 
         format!(
-            "{}°{}'{:.2}\"{}",
-            degrees,
-            minutes.floor(),
-            seconds,
-            direction
+            "{}°{}'{:.2}\"{}, {}°{}'{:.2}\"{}",
+            lat_degrees,
+            lat_minutes.floor(),
+            lat_seconds,
+            lat_direction,
+            long_degrees,
+            long_minutes.floor(),
+            long_seconds,
+            long_direction
         )
-    }
-
-    fn print_connections(&self) {
-        println!("Connections to waypoint {}: ", self.label);
-        for connection in &self.connections {
-            println!(
-                "    {}: {:.2}km away",
-                connection.waypoint.borrow().label,
-                connection.distance
-            );
-        }
-    }
-
-    fn print_DMS(&self) {
-        let lat_direction = if self.lat >= 0.0 { 'N' } else { 'S' };
-        let lon_direction = if self.lon >= 0.0 { 'E' } else { 'W' };
-
-        println!(
-            "Waypoint {} is located at {}, {}",
-            self.label,
-            Waypoint::convert_to_DMS(self.lat, lat_direction),
-            Waypoint::convert_to_DMS(self.lon, lon_direction)
-        );
-    }
-
-    fn print(&self) {
-        println!("Waypoint {}: {:.6}, {:.6}", self.label, self.lat, self.lon)
     }
 }
 
@@ -119,18 +150,28 @@ impl Dataset {
 
     fn generate_waypoints(amt: usize) -> Vec<Rc<RefCell<Waypoint>>> {
         let mut waypoints = Vec::with_capacity(amt);
+        let mut rng = rand::thread_rng();
 
-        for i in 1..=amt {
+        for i in 0..amt {
             let label = Waypoint::generate_label(i);
-            let waypoint = Rc::new(RefCell::new(Waypoint::new(label)));
+            let lat = rng.gen_range(-90.0..=90.0);
+            let lon = rng.gen_range(-180.0..=180.0);
+
+            let waypoint = Rc::new(RefCell::new(Waypoint {
+                label,
+                lat,
+                lon,
+                geohash: Waypoint::encode_geohash(lat, lon, 8), // Default precision is '8' (+/- ~0.02km)
+                connections: Vec::new(),
+            }));
             waypoints.push(waypoint);
         }
 
         waypoints
     }
 
-    // Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
-    // to every other waypoint, sorts distances, and assigns closest 'amt' as connections. O(N^2 * Log N) time complexity.
+    /// Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
+    /// to every other waypoint, sorts distances, and assigns closest 'amt' as connections. O(N^2 * Log N) time complexity.
     fn assign_connections_naive(&mut self, amt: usize) {
         // For each waypoint in the dataset...
         for i in 0..self.waypoints.len() {
@@ -162,5 +203,8 @@ fn main() {
     // let now = Instant::now();
     // let elapsed = now.elapsed();
 
-    let mut dataset = Dataset::new("Bob".to_string(), 1000);
+    let dataset = Dataset::new("Bob".to_string(), 10);
+    for waypoint in dataset.waypoints {
+        println!("{}", waypoint.borrow().geohash)
+    }
 }
