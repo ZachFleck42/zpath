@@ -3,6 +3,7 @@
 use rand::Rng;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 const EARTH_RADIUS: f32 = 6378.137;
@@ -26,6 +27,7 @@ struct Connection {
 struct Dataset {
     name: String,
     waypoints: Vec<Rc<RefCell<Waypoint>>>,
+    geohash_index: HashMap<String, Rc<RefCell<Waypoint>>>,
 }
 
 impl Waypoint {
@@ -142,14 +144,15 @@ impl Waypoint {
 }
 
 impl Dataset {
-    fn new(name: String, size: usize) -> Self {
-        let waypoints = Dataset::generate_waypoints(size);
-
-        Dataset { name, waypoints }
+    fn new(name: String) -> Self {
+        Dataset {
+            name,
+            waypoints: Vec::new(),
+            geohash_index: HashMap::new(),
+        }
     }
 
-    fn generate_waypoints(amt: usize) -> Vec<Rc<RefCell<Waypoint>>> {
-        let mut waypoints = Vec::with_capacity(amt);
+    fn generate_waypoints(&mut self, amt: usize) {
         let mut rng = rand::thread_rng();
 
         for i in 0..amt {
@@ -164,10 +167,11 @@ impl Dataset {
                 geohash: Waypoint::encode_geohash(lat, lon, 8), // Default precision is '8' (+/- ~0.02km)
                 connections: Vec::new(),
             }));
-            waypoints.push(waypoint);
-        }
 
-        waypoints
+            self.geohash_index
+                .insert(waypoint.borrow().geohash.clone(), waypoint.clone());
+            self.waypoints.push(waypoint);
+        }
     }
 
     /// Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
@@ -203,7 +207,9 @@ fn main() {
     // let now = Instant::now();
     // let elapsed = now.elapsed();
 
-    let dataset = Dataset::new("Bob".to_string(), 10);
+    let mut dataset = Dataset::new("Bob".to_string());
+    dataset.generate_waypoints(10);
+
     for waypoint in dataset.waypoints {
         println!("{}", waypoint.borrow().geohash)
     }
