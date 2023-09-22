@@ -20,21 +20,9 @@ struct Connection {
     distance: f32,
 }
 
-#[derive(Debug, Clone)]
-struct KDTreeNode {
-    waypoint: Rc<RefCell<Waypoint>>,
-    left: Option<Box<KDTreeNode>>,
-    right: Option<Box<KDTreeNode>>,
-}
-
-struct KDTree {
-    root: Option<Box<KDTreeNode>>,
-}
-
 struct Dataset {
     name: String,
     waypoints: Vec<Rc<RefCell<Waypoint>>>,
-    kd_tree: Option<KDTree>,
 }
 
 impl Waypoint {
@@ -122,79 +110,11 @@ impl Waypoint {
     }
 }
 
-impl KDTreeNode {
-    fn display(&self, depth: usize) {
-        let indent = "  ".repeat(depth);
-        let waypoint = self.waypoint.borrow();
-        println!(
-            "{}Waypoint {}: ({:.6}, {:.6})",
-            indent, waypoint.label, waypoint.lat, waypoint.lon
-        );
-
-        if let Some(left) = &self.left {
-            println!("{}Left:", indent);
-            left.display(depth + 1);
-        }
-
-        if let Some(right) = &self.right {
-            println!("{}Right:", indent);
-            right.display(depth + 1);
-        }
-    }
-}
-
-impl KDTree {
-    fn new(waypoints: &mut Vec<Rc<RefCell<Waypoint>>>) -> Self {
-        let root = KDTree::build_kd_tree(waypoints, 0);
-        KDTree { root }
-    }
-
-    fn build_kd_tree(
-        waypoints: &mut [Rc<RefCell<Waypoint>>],
-        depth: usize,
-    ) -> Option<Box<KDTreeNode>> {
-        if waypoints.is_empty() {
-            return None;
-        }
-
-        let dimension = depth % 2;
-
-        waypoints.sort_by(|a, b| {
-            if dimension == 0 {
-                a.borrow().lat.partial_cmp(&b.borrow().lat).unwrap()
-            } else {
-                a.borrow().lon.partial_cmp(&b.borrow().lon).unwrap()
-            }
-        });
-
-        let median_index = waypoints.len() / 2;
-        let median = waypoints[median_index].clone();
-
-        Some(Box::new(KDTreeNode {
-            waypoint: median,
-            left: KDTree::build_kd_tree(&mut waypoints[..median_index], depth + 1),
-            right: KDTree::build_kd_tree(&mut waypoints[median_index + 1..], depth + 1),
-        }))
-    }
-
-    fn print(&self) {
-        if let Some(root) = &self.root {
-            root.display(0);
-        } else {
-            println!("k-d tree is empty.");
-        }
-    }
-}
-
 impl Dataset {
     fn new(name: String, size: usize) -> Self {
         let waypoints = Dataset::generate_waypoints(size);
 
-        Dataset {
-            name,
-            waypoints,
-            kd_tree: None,
-        }
+        Dataset { name, waypoints }
     }
 
     fn generate_waypoints(amt: usize) -> Vec<Rc<RefCell<Waypoint>>> {
@@ -207,20 +127,6 @@ impl Dataset {
         }
 
         waypoints
-    }
-
-    fn generate_kd_tree(&mut self) {
-        let mut cloned_waypoint_refs: Vec<Rc<RefCell<Waypoint>>> =
-            self.waypoints.iter().cloned().collect();
-        self.kd_tree = Some(KDTree::new(&mut cloned_waypoint_refs));
-    }
-
-    fn print_kd_tree(&self) {
-        if let Some(tree) = &self.kd_tree {
-            tree.print();
-        } else {
-            println!("A k-d tree has not yet been generated for this dataset.");
-        }
     }
 
     // Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
@@ -257,14 +163,4 @@ fn main() {
     // let elapsed = now.elapsed();
 
     let mut dataset = Dataset::new("Bob".to_string(), 1000);
-
-    let kd_tree = dataset.generate_kd_tree();
-    dataset.print_kd_tree();
-
-    println!();
-
-    dataset.assign_connections_naive(10);
-    dataset.waypoints[0].borrow().print_connections();
-
-    // println!("Elapsed time: {:.2?}", elapsed);
 }
