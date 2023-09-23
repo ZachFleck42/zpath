@@ -5,10 +5,11 @@ mod geohash;
 use rand::Rng;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
 use std::rc::Rc;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Direction {
     North,
     East,
@@ -16,7 +17,7 @@ pub enum Direction {
     West,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Waypoint {
     lat: f32,
     lon: f32,
@@ -25,16 +26,32 @@ struct Waypoint {
     connections: Vec<Connection>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Connection {
-    waypoint: Rc<RefCell<Waypoint>>,
     distance: f32,
+    waypoint: Rc<RefCell<Waypoint>>,
 }
 
 struct Dataset {
     name: String,
     waypoints: Vec<Rc<RefCell<Waypoint>>>,
     geohash_index: HashMap<String, Rc<RefCell<Waypoint>>>,
+}
+
+impl Eq for Connection {}
+
+impl PartialOrd for Connection {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Connection {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.distance
+            .partial_cmp(&other.distance)
+            .unwrap_or(Ordering::Equal)
+    }
 }
 
 impl Waypoint {
@@ -114,53 +131,93 @@ impl Dataset {
             let label = Waypoint::generate_label(i);
             let lat = rng.gen_range(-90.0..=90.0);
             let lon = rng.gen_range(-180.0..=180.0);
+            let geohash = geohash::encode(lat, lon, 8);
+
+            // while self.geohash_index.contains_key(&geohash) {
+            //     lat = rng.gen_range(-90.0..=90.0);
+            //     lon = rng.gen_range(-180.0..=180.0);
+            //     geohash = geohash::encode(lat, lon, 8);
+            // }
 
             let waypoint = Rc::new(RefCell::new(Waypoint {
                 label,
                 lat,
                 lon,
-                geohash: geohash::encode(lat, lon, 8), // Default precision is '8' (+/- ~0.02km)
+                geohash,
                 connections: Vec::new(),
             }));
 
             self.geohash_index
                 .insert(waypoint.borrow().geohash.clone(), waypoint.clone());
+
             self.waypoints.push(waypoint);
         }
     }
 
-    /// Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
-    /// to every other waypoint, sorts distances, and assigns closest 'amt' as connections. O(N^2 * Log N) time complexity.
-    fn assign_connections_naive(&self, amt: usize) {
-        // For each waypoint in the dataset...
-        for i in 0..self.waypoints.len() {
-            let mut source_waypoint = self.waypoints[i].borrow_mut();
-            let mut connections: Vec<Connection> = Vec::with_capacity(self.waypoints.len() - 1);
-
-            // Determine the distance to every other waypoint in the dataset and store in the 'all_connections' vec
-            for j in 0..self.waypoints.len() {
-                if i != j {
-                    let target_waypoint = &self.waypoints[j];
-                    connections.push(Connection {
-                        waypoint: target_waypoint.clone(),
-                        distance: source_waypoint.distance_to(target_waypoint.clone()),
-                    })
-                }
-            }
-
-            // Sort connections from nearest to furthest and assign the nearest 'amt' as connections
-            connections.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-            for j in 0..amt {
-                source_waypoint.connections.push(connections[j].clone())
-            }
-        }
+    fn search_geohash(&self, geohash: &str) -> Vec<Rc<RefCell<Waypoint>>> {
+        self.geohash_index
+            .iter()
+            .filter(|(key, _)| key.starts_with(geohash))
+            .map(|(_, value)| value.clone())
+            .collect()
     }
 
-    /// Finds and assigns connections to waypoints more intelligently using geohashes. Cycles through every point in the
-    /// dataset and uses the dataset's geohash_index HashMap to find waypoints in parent / neighboring geohash partitions.
-    fn assign_connections_geohash(&self) {
-        // For each waypoint in the dataset...
-        for i in 0..self.waypoints.len() {}
+    fn find_knn_naive(&self, target: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
+        let mut nearest_neighbors: Vec<Connection> = Vec::new();
+
+        for neighbor in &self.waypoints {
+            if target != neighbor.clone() {
+                nearest_neighbors.push(Connection {
+                    distance: target.borrow().distance_to(neighbor.clone()),
+                    waypoint: neighbor.clone(),
+                })
+            }
+        }
+
+        nearest_neighbors.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+        nearest_neighbors.truncate(k);
+        nearest_neighbors
+    }
+
+    fn find_knn_geohash(&self, target: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
+        let mut min_heap: BinaryHeap<Connection> = BinaryHeap::new();
+        let mut geohash_to_search = target.borrow().geohash.clone();
+
+        // Search the target's geohash cell with decreasing precision until k neighbors are found
+        while min_heap.len() < k {
+            for neighbor in self.search_geohash(&geohash_to_search) {
+                min_heap.push(Connection {
+                    distance: target.borrow().distance_to(neighbor.clone()),
+                    waypoint: neighbor,
+                })
+            }
+
+            geohash_to_search.pop();
+        }
+
+        // Although we now have at least k neighbors, we need to search the 8 surrounding geohash
+        // cells to account for cases in which the target is located near the edge of its cell
+        for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
+            for neighbor in self.search_geohash(&adjacent_cell) {
+                min_heap.push(Connection {
+                    distance: target.borrow().distance_to(neighbor.clone()),
+                    waypoint: neighbor,
+                })
+            }
+        }
+
+        // Convert binary heap to vector, truncate to nearest k elements, and return
+        let mut nearest_neighbors = min_heap.into_sorted_vec();
+        nearest_neighbors.dedup();
+        nearest_neighbors.truncate(k);
+        nearest_neighbors
+    }
+
+    fn assign_connections(&self, amt: usize) {
+        for waypoint in &self.waypoints {
+            let connections = self.find_knn_geohash(waypoint.clone(), amt);
+            waypoint.borrow_mut().connections.extend(connections);
+        }
     }
 }
 
@@ -170,14 +227,5 @@ fn main() {
     // let elapsed = now.elapsed();
 
     let mut dataset = Dataset::new("Bob".to_string());
-    dataset.generate_waypoints(10000);
-
-    let mut keys: Vec<&String> = dataset.geohash_index.keys().collect();
-    keys.sort();
-
-    for key in keys {
-        if key.starts_with("zz") {
-            println!("{}", key);
-        }
-    }
+    dataset.generate_waypoints(2000);
 }

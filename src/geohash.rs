@@ -1,7 +1,9 @@
 use crate::Direction;
 
+// Geohashes are represented using characters from a Base32 alphabet variant called the 'geohash alphabet' or '32ghs'
 const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
 
+// The following are lookup tables used in get_adjacent_cell(); they vary depending on direction and type of geohash
 const NEIGHBORS_A: [char; 32] = [
     'p', '0', 'r', '2', '1', '4', '3', '6', 'x', '8', 'z', 'b', '9', 'd', 'c', 'f', '5', 'h', '7',
     'k', 'j', 'n', 'm', 'q', 'e', 's', 'g', 'u', 't', 'w', 'v', 'y',
@@ -81,6 +83,10 @@ pub fn encode(lat: f32, lon: f32, precision: usize) -> String {
 
 /// Returns the geohash string of the adjacent cell in the provided direction
 pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
+    if geohash.is_empty() {
+        return String::new();
+    }
+
     let mut parent_geohash = String::from(&geohash[0..geohash.len() - 1]);
     let child_char = geohash.chars().last().unwrap();
 
@@ -115,7 +121,7 @@ pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     format!("{}{}", parent_geohash, adjacent_cell_char)
 }
 
-/// Returns a vector of Strings of all adjacent cells to a geohash
+/// Returns a vector of strings of all adjacent cells to a geohash
 pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
     let directions = [
         Direction::North,
@@ -131,7 +137,7 @@ pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
 
         if direction == Direction::North || direction == Direction::South {
             adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
-            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
+            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::West));
         }
 
         adjacent_cells.push(adjacent);
