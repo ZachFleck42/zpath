@@ -6,7 +6,7 @@ use rand::Rng;
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::rc::Rc;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -182,27 +182,31 @@ impl Dataset {
     fn find_knn_geohash(&self, target: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
         let mut min_heap: BinaryHeap<Connection> = BinaryHeap::new();
         let mut geohash_to_search = target.borrow().geohash.clone();
+        let mut visited: HashSet<String> = HashSet::new();
 
         // Search the target's geohash cell with decreasing precision until k neighbors are found
         while min_heap.len() < k {
-            for neighbor in self.search_geohash(&geohash_to_search) {
-                min_heap.push(Connection {
-                    distance: target.borrow().distance_to(neighbor.clone()),
-                    waypoint: neighbor,
-                })
-            }
-
             geohash_to_search.pop();
+            for neighbor in self.search_geohash(&geohash_to_search) {
+                if visited.insert(neighbor.borrow().label.clone()) {
+                    min_heap.push(Connection {
+                        distance: target.borrow().distance_to(neighbor.clone()),
+                        waypoint: neighbor.clone(),
+                    });
+                }
+            }
         }
 
-        // Although we now have at least k neighbors, we need to search the 8 surrounding geohash
+        // Although we now have at least k neighbors, we need to search the surrounding geohash
         // cells to account for cases in which the target is located near the edge of its cell
         for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
             for neighbor in self.search_geohash(&adjacent_cell) {
-                min_heap.push(Connection {
-                    distance: target.borrow().distance_to(neighbor.clone()),
-                    waypoint: neighbor,
-                })
+                if visited.insert(neighbor.borrow().label.clone()) {
+                    min_heap.push(Connection {
+                        distance: target.borrow().distance_to(neighbor.clone()),
+                        waypoint: neighbor,
+                    })
+                }
             }
         }
 
@@ -226,6 +230,6 @@ fn main() {
     // let now = Instant::now();
     // let elapsed = now.elapsed();
 
-    let mut dataset = Dataset::new("Bob".to_string());
-    dataset.generate_waypoints(2000);
+    // let mut dataset = Dataset::new("Bob".to_string());
+    // dataset.generate_waypoints(2000);
 }

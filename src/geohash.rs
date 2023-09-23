@@ -121,7 +121,8 @@ pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     format!("{}{}", parent_geohash, adjacent_cell_char)
 }
 
-/// Returns a vector of strings of all adjacent cells to a geohash
+/// Returns a vector of geohash strings representing all cells surrounding a geohash
+/// that could possibly contain points closer to those found in itself
 pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
     let directions = [
         Direction::North,
@@ -134,13 +135,27 @@ pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
 
     for direction in directions {
         let adjacent = get_adjacent_cell(geohash, direction);
+        let double_adjacent = get_adjacent_cell(&adjacent, direction);
 
         if direction == Direction::North || direction == Direction::South {
-            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
-            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::West));
+            // NE, NW, SE, SW
+            let diagonal_east = get_adjacent_cell(&adjacent, Direction::East);
+            let diagonal_west = get_adjacent_cell(&adjacent, Direction::West);
+
+            // NEE, NWW, SEE, SWW
+            adjacent_cells.push(get_adjacent_cell(&diagonal_east, Direction::East));
+            adjacent_cells.push(get_adjacent_cell(&diagonal_west, Direction::West));
+
+            // NNE, NNW, SSE, SSW
+            adjacent_cells.push(get_adjacent_cell(&double_adjacent, Direction::East));
+            adjacent_cells.push(get_adjacent_cell(&double_adjacent, Direction::West));
+
+            adjacent_cells.push(diagonal_east);
+            adjacent_cells.push(diagonal_west);
         }
 
         adjacent_cells.push(adjacent);
+        adjacent_cells.push(double_adjacent);
     }
 
     adjacent_cells
