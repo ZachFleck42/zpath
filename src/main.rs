@@ -33,10 +33,15 @@ struct Connection {
     waypoint: Rc<RefCell<Waypoint>>,
 }
 
+struct Trie {
+    waypoint: Option<Rc<RefCell<Waypoint>>>,
+    children: HashMap<char, Trie>,
+}
+
 struct Dataset {
     name: String,
     waypoints: Vec<Rc<RefCell<Waypoint>>>,
-    geohash_index: HashMap<String, Rc<RefCell<Waypoint>>>,
+    geohash_index: Trie,
 }
 
 impl Eq for Connection {}
@@ -116,12 +121,57 @@ impl Waypoint {
     }
 }
 
+impl Trie {
+    fn new() -> Self {
+        Trie {
+            waypoint: None,
+            children: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, geohash: &str, waypoint: Option<Rc<RefCell<Waypoint>>>) {
+        let mut current_node = self;
+
+        for c in geohash.chars() {
+            current_node = current_node.children.entry(c).or_insert(Trie::new());
+        }
+
+        current_node.waypoint = waypoint;
+    }
+
+    fn get_all_with_prefix(&self, prefix: &str) -> Vec<Rc<RefCell<Waypoint>>> {
+        let mut current = self;
+        let mut found_waypoints = Vec::new();
+
+        for c in prefix.chars() {
+            if let Some(child) = current.children.get(&c) {
+                current = child;
+            } else {
+                return Vec::new();
+            }
+        }
+
+        self.collect_waypoints_recursive(&current, &mut found_waypoints);
+        found_waypoints
+    }
+
+    fn collect_waypoints_recursive(&self, node: &Trie, waypoints: &mut Vec<Rc<RefCell<Waypoint>>>) {
+        if let Some(waypoint) = &node.waypoint {
+            waypoints.push(waypoint.clone());
+        }
+
+        for child in node.children.values() {
+            self.collect_waypoints_recursive(child, waypoints);
+        }
+    }
+}
+
 impl Dataset {
     fn new(name: String) -> Self {
         Dataset {
             name,
             waypoints: Vec::new(),
-            geohash_index: HashMap::new(),
+            geohash_index: Trie::new(),
         }
     }
 
@@ -149,18 +199,14 @@ impl Dataset {
             }));
 
             self.geohash_index
-                .insert(waypoint.borrow().geohash.clone(), waypoint.clone());
+                .insert(&waypoint.borrow().geohash, Some(waypoint.clone()));
 
             self.waypoints.push(waypoint);
         }
     }
 
     fn search_geohash(&self, geohash: &str) -> Vec<Rc<RefCell<Waypoint>>> {
-        self.geohash_index
-            .iter()
-            .filter(|(key, _)| key.starts_with(geohash))
-            .map(|(_, value)| value.clone())
-            .collect()
+        self.geohash_index.get_all_with_prefix(geohash)
     }
 
     fn find_knn_naive(&self, target: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
@@ -236,8 +282,6 @@ fn main() {
 
     let aaa = dataset.waypoints[0].clone();
     let k = 7;
-
-    println!();
 
     println!(
         "Point {} at {:.2}, {:.2} - {}",
