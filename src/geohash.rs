@@ -80,9 +80,9 @@ pub fn encode(lat: f32, lon: f32, precision: usize) -> String {
 }
 
 /// Returns the geohash string of the adjacent cell in the provided direction
-pub fn adjacent(geohash: String, direction: Direction) -> String {
+pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     let mut parent_geohash = String::from(&geohash[0..geohash.len() - 1]);
-    let child_char = geohash.chars().last();
+    let child_char = geohash.chars().last().unwrap();
 
     // Based on the current cell's type (4x8 or 8x4) and the direction of
     // the adjacent cell, determine which set of lookup tables to reference
@@ -104,16 +104,38 @@ pub fn adjacent(geohash: String, direction: Direction) -> String {
     // In the case that the relevant adjacent cell is not contained within the
     // current cell's parent, we need to alter the parent_geohash to its adjacent
     // counterpart in the relevant direction.
-    if border.contains(&child_char.unwrap()) && !parent_geohash.is_empty() {
-        parent_geohash = adjacent(parent_geohash, direction)
+    if border.contains(&child_char) && !parent_geohash.is_empty() {
+        parent_geohash = get_adjacent_cell(&parent_geohash, direction)
     }
 
     // Use the neighbor lookup table to determine which child cell is in the relevant direction
-    let index = neighbor
-        .iter()
-        .position(|&c| c == child_char.unwrap())
-        .unwrap();
+    let index = neighbor.iter().position(|&c| c == child_char).unwrap();
     let adjacent_cell_char = BASE_32GHS[index] as char;
 
     format!("{}{}", parent_geohash, adjacent_cell_char)
+}
+
+/// Returns a vector of Strings of all adjacent cells to a geohash
+pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
+    let directions = [
+        Direction::North,
+        Direction::East,
+        Direction::South,
+        Direction::West,
+    ];
+
+    let mut adjacent_cells = Vec::with_capacity(8);
+
+    for direction in directions {
+        let adjacent = get_adjacent_cell(geohash, direction.clone());
+
+        if direction == Direction::North || direction == Direction::South {
+            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
+            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
+        }
+
+        adjacent_cells.push(adjacent);
+    }
+
+    adjacent_cells
 }
