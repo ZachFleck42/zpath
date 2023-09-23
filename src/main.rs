@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum Direction {
     North,
     East,

@@ -127,7 +127,7 @@ pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
     let mut adjacent_cells = Vec::with_capacity(8);
 
     for direction in directions {
-        let adjacent = get_adjacent_cell(geohash, direction.clone());
+        let adjacent = get_adjacent_cell(geohash, direction);
 
         if direction == Direction::North || direction == Direction::South {
             adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
