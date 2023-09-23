@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::rc::Rc;
+use std::time::Instant;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Direction {
@@ -183,24 +184,12 @@ impl Dataset {
         let mut min_heap: BinaryHeap<Connection> = BinaryHeap::new();
         let mut geohash_to_search = target.borrow().geohash.clone();
         let mut visited: HashSet<String> = HashSet::new();
+        visited.insert(target.borrow().label.clone());
 
-        // Search the target's geohash cell with decreasing precision until k neighbors are found
         while min_heap.len() < k {
-            geohash_to_search.pop();
+            // Search the current geohash cell for points
             for neighbor in self.search_geohash(&geohash_to_search) {
-                if visited.insert(neighbor.borrow().label.clone()) {
-                    min_heap.push(Connection {
-                        distance: target.borrow().distance_to(neighbor.clone()),
-                        waypoint: neighbor.clone(),
-                    });
-                }
-            }
-        }
-
-        // Although we now have at least k neighbors, we need to search the surrounding geohash
-        // cells to account for cases in which the target is located near the edge of its cell
-        for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
-            for neighbor in self.search_geohash(&adjacent_cell) {
+                // println!("Searching {}", &geohash_to_search);
                 if visited.insert(neighbor.borrow().label.clone()) {
                     min_heap.push(Connection {
                         distance: target.borrow().distance_to(neighbor.clone()),
@@ -208,6 +197,22 @@ impl Dataset {
                     })
                 }
             }
+
+            // Search the adjacent geohash cells for points that might be closer
+            for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
+                // println!("Searching {}", adjacent_cell);
+                for neighbor in self.search_geohash(&adjacent_cell) {
+                    if visited.insert(neighbor.borrow().label.clone()) {
+                        min_heap.push(Connection {
+                            distance: target.borrow().distance_to(neighbor.clone()),
+                            waypoint: neighbor,
+                        })
+                    }
+                }
+            }
+
+            // If we still don't have k neighbors, remove a level of precision and repeat
+            geohash_to_search.pop();
         }
 
         // Convert binary heap to vector, truncate to nearest k elements, and return
@@ -226,10 +231,57 @@ impl Dataset {
 }
 
 fn main() {
-    // use std::time::Instant;
-    // let now = Instant::now();
-    // let elapsed = now.elapsed();
+    let mut dataset = Dataset::new("Bob".to_string());
+    dataset.generate_waypoints(10000);
 
-    // let mut dataset = Dataset::new("Bob".to_string());
-    // dataset.generate_waypoints(2000);
+    let aaa = dataset.waypoints[0].clone();
+    let k = 7;
+
+    println!();
+
+    println!(
+        "Point {} at {:.2}, {:.2} - {}",
+        aaa.borrow().label,
+        aaa.borrow().lat,
+        aaa.borrow().lon,
+        aaa.borrow().geohash
+    );
+
+    println!();
+
+    let start_time_1 = Instant::now();
+    let nn_naive = dataset.find_knn_naive(aaa.clone(), k);
+    let end_time_1 = Instant::now();
+    println!("Nearest neighbors found by naive search");
+    for connection in nn_naive {
+        println!(
+            "{} - {}, {:.2}km",
+            connection.waypoint.borrow().label,
+            connection.waypoint.borrow().geohash,
+            connection.distance
+        );
+    }
+    println!(
+        "Search completed in {:?}",
+        end_time_1.duration_since(start_time_1)
+    );
+
+    println!();
+
+    let start_time_2 = Instant::now();
+    let nn_geohash = dataset.find_knn_geohash(aaa.clone(), k);
+    let end_time_2 = Instant::now();
+    println!("Nearest neighbors found by geohash search:");
+    for connection in nn_geohash {
+        println!(
+            "{} - {}, {:.2}km",
+            connection.waypoint.borrow().label,
+            connection.waypoint.borrow().geohash,
+            connection.distance
+        );
+    }
+    println!(
+        "Search completed in {:?}",
+        end_time_2.duration_since(start_time_2)
+    );
 }
