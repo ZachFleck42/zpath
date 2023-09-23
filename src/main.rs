@@ -1,13 +1,19 @@
 #![allow(dead_code, non_snake_case, unused_variables)]
 
+mod geohash;
+
 use rand::Rng;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-const EARTH_RADIUS: f32 = 6378.137;
-const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
 
 #[derive(Debug, Clone)]
 struct Waypoint {
@@ -33,6 +39,8 @@ struct Dataset {
 impl Waypoint {
     /// Implements the Haversine formula to find the distance between self and another waypoint (in km)
     fn distance_to(&self, target: Rc<RefCell<Waypoint>>) -> f32 {
+        const EARTH_RADIUS: f32 = 6378.137;
+
         let target_waypoint = target.borrow();
 
         let lat1 = self.lat.to_radians();
@@ -59,60 +67,6 @@ impl Waypoint {
         }
 
         label.chars().rev().collect()
-    }
-
-    /// Builds a geohash String from the provided coordinates
-    fn encode_geohash(lat: f32, lon: f32, precision: usize) -> String {
-        // We will be building the geohash character by character
-        let mut geohash = Vec::with_capacity(precision);
-
-        // Initialize latitude and longitude mins / maxes to the entire range of Earth
-        // These values will change as we subdivide the Earth into smaller and smaller pieces
-        let (mut lat_min, mut lat_max) = (-90.0, 90.0);
-        let (mut lon_min, mut lon_max) = (-180.0, 180.0);
-
-        let mut bits = 0; // The 5 binary bits used to determine which base32 char to append next; initially '00000'
-        let mut bit = 0; // Which digit in 'bits' we are currently assigning (from least significant to most)
-        let mut flip = true; // Alternates between true / false to switch between assigning bits based on lat / lon
-
-        while geohash.len() < precision {
-            let midpoint;
-
-            // Determine whether or not the current digit in bits should be a '0' or '1' and assign appropriately
-            if flip {
-                midpoint = (lon_min + lon_max) / 2.0;
-
-                if lon > midpoint {
-                    bits |= 1 << (4 - bit);
-                    lon_min = midpoint;
-                } else {
-                    lon_max = midpoint;
-                }
-            } else {
-                midpoint = (lat_min + lat_max) / 2.0;
-
-                if lat > midpoint {
-                    bits |= 1 << (4 - bit);
-                    lat_min = midpoint;
-                } else {
-                    lat_max = midpoint;
-                }
-            }
-
-            // Once 'bits' has all five bits populated, we can translate the constructed binary number into base32
-            // Otherwise, move to the next bit in bits and repeat until full
-            if bit == 4 {
-                geohash.push(BASE_32GHS[bits]); // Push the appropriate 32ghs char to the end of the geohash
-                bits = 0; // Reset bits back to 00000
-                bit = 0; // Reset bit back to least significant digit in bits
-            } else {
-                bit += 1;
-            }
-
-            flip = !flip;
-        }
-
-        String::from_utf8(geohash).expect("Invalid UTF-8")
     }
 
     /// Returns a String of the Waypoint's coordinates in Degrees/Minutes/Seconds (DMS) format
@@ -164,7 +118,7 @@ impl Dataset {
                 label,
                 lat,
                 lon,
-                geohash: Waypoint::encode_geohash(lat, lon, 8), // Default precision is '8' (+/- ~0.02km)
+                geohash: geohash::encode(lat, lon, 8), // Default precision is '8' (+/- ~0.02km)
                 connections: Vec::new(),
             }));
 
@@ -176,7 +130,7 @@ impl Dataset {
 
     /// Naive method of assigning connections to waypoints. Cycles through every waypoint in the dataset, checks distance
     /// to every other waypoint, sorts distances, and assigns closest 'amt' as connections. O(N^2 * Log N) time complexity.
-    fn assign_connections_naive(&mut self, amt: usize) {
+    fn assign_connections_naive(&self, amt: usize) {
         // For each waypoint in the dataset...
         for i in 0..self.waypoints.len() {
             let mut source_waypoint = self.waypoints[i].borrow_mut();
@@ -200,6 +154,13 @@ impl Dataset {
             }
         }
     }
+
+    /// Finds and assigns connections to waypoints more intelligently using geohashes. Cycles through every point in the
+    /// dataset and uses the dataset's geohash_index HashMap to find waypoints in parent / neighboring geohash partitions.
+    fn assign_connections_geohash(&self) {
+        // For each waypoint in the dataset...
+        for i in 0..self.waypoints.len() {}
+    }
 }
 
 fn main() {
@@ -208,9 +169,14 @@ fn main() {
     // let elapsed = now.elapsed();
 
     let mut dataset = Dataset::new("Bob".to_string());
-    dataset.generate_waypoints(10);
+    dataset.generate_waypoints(10000);
 
-    for waypoint in dataset.waypoints {
-        println!("{}", waypoint.borrow().geohash)
+    let mut keys: Vec<&String> = dataset.geohash_index.keys().collect();
+    keys.sort();
+
+    for key in keys {
+        if key.starts_with("zz") {
+            println!("{}", key);
+        }
     }
 }
