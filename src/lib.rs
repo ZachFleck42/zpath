@@ -1,5 +1,3 @@
-#![allow(dead_code, non_snake_case)]
-
 mod geohash;
 
 use rand::Rng;
@@ -23,14 +21,27 @@ pub struct Connection {
 }
 
 pub struct Trie {
-    waypoint_index: Option<usize>,
     children: HashMap<char, Trie>,
+    waypoint_index: Option<usize>,
+}
+
+struct AStarNode {
+    f_score: f32,
+    waypoint_index: usize,
 }
 
 pub struct Dataset {
     pub waypoints: Vec<Waypoint>,
     pub geohash_index: Trie,
 }
+
+impl PartialEq for Waypoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.label == other.label
+    }
+}
+
+impl Eq for Waypoint {}
 
 impl Waypoint {
     /// Implements the Haversine formula to find the distance between self and another waypoint (in km)
@@ -70,7 +81,7 @@ impl Waypoint {
     }
 
     /// Returns a String of the Waypoint's coordinates in Degrees/Minutes/Seconds (DMS) format
-    pub fn get_DMS(&self) -> String {
+    pub fn get_dms(&self) -> String {
         let lat = self.lat.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
         let lat_degrees = lat.floor(); // The whole number portion of the value equals degrees
         let lat_minutes = (lat - lat_degrees) * 60.0; // The decimal portion of the value, times 60, equals minutes
@@ -161,6 +172,29 @@ impl Trie {
         for child in node.children.values() {
             self.collect_waypoints_recursive(child, waypoints);
         }
+    }
+}
+
+impl PartialEq for AStarNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.waypoint_index == other.waypoint_index
+    }
+}
+
+impl Eq for AStarNode {}
+
+impl PartialOrd for AStarNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AStarNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .f_score
+            .partial_cmp(&self.f_score)
+            .unwrap_or(Ordering::Equal)
     }
 }
 
@@ -265,5 +299,62 @@ impl Dataset {
             let connections = self.get_knn_geohash(&self.waypoints[i], amt);
             self.waypoints[i].connections.extend(connections);
         }
+    }
+
+    /// Finds the shortest path between two waypoints using the A* algorithm.
+    pub fn get_shortest_route(&self, start: &Waypoint, goal: &Waypoint) -> Option<Vec<usize>> {
+        let mut open_set: BinaryHeap<AStarNode> = BinaryHeap::new();
+        let mut came_from: HashMap<usize, usize> = HashMap::new();
+        let mut g_scores: HashMap<usize, f32> = HashMap::new();
+        let start_index = self.get_waypoint_index(&start);
+
+        // Initialize the open set and g_scores map with the starting point
+        g_scores.insert(start_index, 0.0);
+        open_set.push(AStarNode {
+            f_score: 0.0,
+            waypoint_index: start_index,
+        });
+
+        // While there are still routes to explore in the open set...
+        while let Some(node) = open_set.pop() {
+            let current_index = node.waypoint_index;
+            let current_waypoint = &self.waypoints[current_index];
+
+            // If the current waypoint is the goal waypoint...
+            if current_waypoint == goal {
+                let mut path = vec![current_index];
+                let mut current = current_index;
+
+                // Reconstruct the route by following the 'came_from' map and return it
+                while let Some(&previous_index) = came_from.get(&current) {
+                    path.push(previous_index);
+                    current = previous_index;
+                }
+                path.reverse();
+                return Some(path);
+            }
+
+            // Explore neighbors of the current waypoint
+            for neighbor in &current_waypoint.connections {
+                let neighbor_index = neighbor.waypoint_index;
+                let g_score = g_scores[&current_index] + neighbor.distance;
+
+                // If the neighbor has not been visited or a shorter path is found...
+                if !g_scores.contains_key(&neighbor_index) || g_score < g_scores[&neighbor_index] {
+                    // This is a better path to the neighbor
+                    came_from.insert(neighbor_index, current_index);
+                    g_scores.insert(neighbor_index, g_score);
+
+                    // Add the neighbor to the open set for further exploration
+                    let h_score = &self.waypoints[neighbor_index].get_distance_to(goal);
+                    open_set.push(AStarNode {
+                        f_score: g_score + h_score,
+                        waypoint_index: neighbor_index,
+                    });
+                }
+            }
+        }
+
+        None
     }
 }
