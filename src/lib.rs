@@ -54,11 +54,17 @@ impl Waypoint {
         EARTH_RADIUS * c
     }
 
-    /// Generates a sequential three-character label, from 'AAA' to 'AAB' to 'ZZZ', based on the passed-in value 'n'.
-    fn generate_label(mut n: usize) -> String {
+    /// Generates a sequential character label based on waypoint's position 'n' in a set of size 'total_amt'
+    fn generate_label(mut n: usize, mut total_amt: usize) -> String {
         let mut label = String::new();
+        let mut label_len = 1;
 
-        for _ in 0..3 {
+        while total_amt > 26 {
+            total_amt /= 26;
+            label_len += 1;
+        }
+
+        for _ in 0..label_len {
             let remainder = n % 26;
             let char_value = (remainder as u8 + b'A') as char;
             label.push(char_value);
@@ -170,7 +176,7 @@ impl Dataset {
         let mut rng = rand::thread_rng();
 
         for i in 0..amt {
-            let label = Waypoint::generate_label(i);
+            let label = Waypoint::generate_label(i, amt);
             let lat = rng.gen_range(-90.0..=90.0);
             let lon = rng.gen_range(-180.0..=180.0);
             let geohash = geohash::encode(lat, lon, 8);
