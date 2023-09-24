@@ -88,7 +88,7 @@ pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     }
 
     let mut parent_geohash = String::from(&geohash[0..geohash.len() - 1]);
-    let child_char = geohash.chars().last().unwrap();
+    let last_char = geohash.chars().last().unwrap();
 
     // Based on the current cell's type (4x8 or 8x4) and the direction of
     // the adjacent cell, determine which set of lookup tables to reference
@@ -110,19 +110,18 @@ pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     // In the case that the relevant adjacent cell is not contained within the
     // current cell's parent, we need to alter the parent_geohash to its adjacent
     // counterpart in the relevant direction.
-    if border.contains(&child_char) && !parent_geohash.is_empty() {
+    if border.contains(&last_char) && !parent_geohash.is_empty() {
         parent_geohash = get_adjacent_cell(&parent_geohash, direction)
     }
 
     // Use the neighbor lookup table to determine which child cell is in the relevant direction
-    let index = neighbor.iter().position(|&c| c == child_char).unwrap();
+    let index = neighbor.iter().position(|&c| c == last_char).unwrap();
     let adjacent_cell_char = BASE_32GHS[index] as char;
 
     format!("{}{}", parent_geohash, adjacent_cell_char)
 }
 
 /// Returns a vector of geohash strings representing all cells surrounding a geohash
-/// that could possibly contain points closer to those found in itself
 pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
     let directions = [
         Direction::North,
@@ -135,27 +134,13 @@ pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
 
     for direction in directions {
         let adjacent = get_adjacent_cell(geohash, direction);
-        let double_adjacent = get_adjacent_cell(&adjacent, direction);
 
         if direction == Direction::North || direction == Direction::South {
-            // NE, NW, SE, SW
-            let diagonal_east = get_adjacent_cell(&adjacent, Direction::East);
-            let diagonal_west = get_adjacent_cell(&adjacent, Direction::West);
-
-            // NEE, NWW, SEE, SWW
-            adjacent_cells.push(get_adjacent_cell(&diagonal_east, Direction::East));
-            adjacent_cells.push(get_adjacent_cell(&diagonal_west, Direction::West));
-
-            // NNE, NNW, SSE, SSW
-            adjacent_cells.push(get_adjacent_cell(&double_adjacent, Direction::East));
-            adjacent_cells.push(get_adjacent_cell(&double_adjacent, Direction::West));
-
-            adjacent_cells.push(diagonal_east);
-            adjacent_cells.push(diagonal_west);
+            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::East));
+            adjacent_cells.push(get_adjacent_cell(&adjacent, Direction::West));
         }
 
         adjacent_cells.push(adjacent);
-        adjacent_cells.push(double_adjacent);
     }
 
     adjacent_cells

@@ -226,39 +226,35 @@ impl Dataset {
         nearest_neighbors
     }
 
-    fn find_knn_geohash(&self, target: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
+    fn find_knn_geohash(&self, waypoint: Rc<RefCell<Waypoint>>, k: usize) -> Vec<Connection> {
+        let mut geohash_to_search = waypoint.borrow().geohash.clone();
         let mut min_heap: BinaryHeap<Connection> = BinaryHeap::new();
-        let mut geohash_to_search = target.borrow().geohash.clone();
         let mut visited: HashSet<String> = HashSet::new();
-        visited.insert(target.borrow().label.clone());
+        visited.insert(waypoint.borrow().label.clone());
 
         while min_heap.len() < k {
-            // Search the current geohash cell for points
+            // Remove a level of precision and search the larger geohash cell for neighbors
+            geohash_to_search.pop();
             for neighbor in self.search_geohash(&geohash_to_search) {
-                // println!("Searching {}", &geohash_to_search);
                 if visited.insert(neighbor.borrow().label.clone()) {
                     min_heap.push(Connection {
-                        distance: target.borrow().distance_to(neighbor.clone()),
+                        distance: waypoint.borrow().distance_to(neighbor.clone()),
                         waypoint: neighbor,
                     })
                 }
             }
+        }
 
-            // Search the adjacent geohash cells for points that might be closer
-            for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
-                // println!("Searching {}", adjacent_cell);
-                for neighbor in self.search_geohash(&adjacent_cell) {
-                    if visited.insert(neighbor.borrow().label.clone()) {
-                        min_heap.push(Connection {
-                            distance: target.borrow().distance_to(neighbor.clone()),
-                            waypoint: neighbor,
-                        })
-                    }
+        // k neighbors have been found, but check surrounding cells for edge cases
+        for adjacent_cell in geohash::get_surrounding_cells(&geohash_to_search) {
+            for neighbor in self.search_geohash(&adjacent_cell) {
+                if visited.insert(neighbor.borrow().label.clone()) {
+                    min_heap.push(Connection {
+                        distance: waypoint.borrow().distance_to(neighbor.clone()),
+                        waypoint: neighbor,
+                    })
                 }
             }
-
-            // If we still don't have k neighbors, remove a level of precision and repeat
-            geohash_to_search.pop();
         }
 
         // Convert binary heap to vector, truncate to nearest k elements, and return
