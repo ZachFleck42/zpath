@@ -1,4 +1,10 @@
-use crate::Direction;
+#[derive(Clone, Copy, PartialEq)]
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
 
 // Geohashes are represented using characters from a Base32 alphabet variant called the 'geohash alphabet' or '32ghs'
 const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
