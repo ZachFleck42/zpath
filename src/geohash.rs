@@ -10,6 +10,11 @@ pub enum Direction {
 const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
 
 // The following are lookup tables used in get_adjacent_cell(); they vary depending on direction and type of geohash
+const BORDERS_A: [char; 4] = ['p', 'r', 'x', 'z'];
+const BORDERS_B: [char; 8] = ['b', 'c', 'f', 'g', 'u', 'v', 'y', 'z'];
+const BORDERS_C: [char; 4] = ['0', '2', '8', 'b'];
+const BORDERS_D: [char; 8] = ['0', '1', '4', '5', 'h', 'j', 'n', 'p'];
+
 const NEIGHBORS_A: [char; 32] = [
     'p', '0', 'r', '2', '1', '4', '3', '6', 'x', '8', 'z', 'b', '9', 'd', 'c', 'f', '5', 'h', '7',
     'k', 'j', 'n', 'm', 'q', 'e', 's', 'g', 'u', 't', 'w', 'v', 'y',
@@ -27,14 +32,33 @@ const NEIGHBORS_D: [char; 32] = [
     't', 'q', 'r', 'w', 'x', 'u', 'v', 'h', 'j', 'y', 'z', 'n', 'p',
 ];
 
-const BORDERS_A: [char; 4] = ['p', 'r', 'x', 'z'];
-const BORDERS_B: [char; 8] = ['b', 'c', 'f', 'g', 'u', 'v', 'y', 'z'];
-const BORDERS_C: [char; 4] = ['0', '2', '8', 'b'];
-const BORDERS_D: [char; 8] = ['0', '1', '4', '5', 'h', 'j', 'n', 'p'];
-
-/// Builds a geohash String from the provided coordinates
+/// Encodes a geographic location specified by latitude and longitude into a
+/// geohash string with the given precision.
+///
+/// # Arguments
+///
+/// * `lat` - The latitude of the geographic location to encode, ranging from -90.0 to 90.0.
+/// * `lon` - The longitude of the geographic location to encode, ranging from -180.0 to 180.0.
+/// * `precision` - The desired precision of the geohash, represented as the number of characters in the resulting string.
+///
+/// # Returns
+///
+/// A string representing the geohash of the specified location with the desired precision.
+///
+/// # Example
+///
+/// ```
+/// use geohash::encode;
+///
+/// let latitude = 37.7749;
+/// let longitude = -122.4194;
+/// let precision = 8;
+///
+/// let geohash = encode(latitude, longitude, precision);
+///
+/// println!("Geohash: {}", geohash); // Example output: "9q8yyk8y"
+/// ```
 pub fn encode(lat: f32, lon: f32, precision: usize) -> String {
-    // We will be building the geohash character by character
     let mut geohash = Vec::with_capacity(precision);
 
     // Initialize latitude and longitude mins / maxes to the entire range of Earth
@@ -87,8 +111,29 @@ pub fn encode(lat: f32, lon: f32, precision: usize) -> String {
     String::from_utf8(geohash).unwrap()
 }
 
-/// Returns the geohash string of the adjacent cell in the provided direction
-pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
+/// Finds and returns the geohash of the cell adjacent to the given geohash in the specified direction.
+///
+/// # Arguments
+///
+/// * `geohash` - The geohash of the current cell.
+/// * `direction` - The direction in which to find the adjacent cell.
+///   Must be one of: `Direction::North`, `Direction::East`, `Direction::South`, `Direction::West`.
+///
+/// # Returns
+///
+/// A string representing the geohash of the adjacent cell.
+///
+/// # Example
+///
+/// ```
+/// use geohash::{get_adjacent_cell, Direction};
+///
+/// let current_geohash = "u4pruydq";
+/// let adjacent_geohash_north = get_adjacent_cell(current_geohash, Direction::North);
+///
+/// println!("Adjacent cell to the North: {}", adjacent_geohash_north); // Example output: "u4pruydr"
+/// ```
+fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     if geohash.is_empty() {
         return String::new();
     }
@@ -127,7 +172,26 @@ pub fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     format!("{}{}", parent_geohash, adjacent_cell_char)
 }
 
-/// Returns a vector of geohash strings representing all cells surrounding a geohash
+/// Finds and returns the geohash strings of all the cells surrounding a given geohash cell.
+///
+/// # Arguments
+///
+/// * `geohash` - The geohash of the center cell.
+///
+/// # Returns
+///
+/// A vector of strings representing the geohash of the surrounding cells.
+///
+/// # Example
+///
+/// ```
+/// use geohash::{get_surrounding_cells};
+///
+/// let center_geohash = "u4pruydq";
+/// let surrounding_geohashes = get_surrounding_cells(center_geohash);
+///
+/// println!("Surrounding cells: {:?}", surrounding_geohashes);
+/// ```
 pub fn get_surrounding_cells(geohash: &str) -> Vec<String> {
     let directions = [
         Direction::North,
