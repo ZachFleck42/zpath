@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Represents a geospatial waypoint with latitude, longitude, a label, geohash, and connections.
 #[derive(Debug, Clone)]
 pub struct Waypoint {
     pub lat: f32,
@@ -14,22 +15,26 @@ pub struct Waypoint {
     pub connections: Vec<Connection>,
 }
 
+/// Represents a connection between waypoints with a distance and a waypoint index.
 #[derive(Debug, Clone)]
 pub struct Connection {
     pub distance: f32,
     pub waypoint_index: usize,
 }
 
+/// Represents a Trie data structure for indexing waypoints based on geohash prefixes.
 pub struct Trie {
     children: HashMap<char, Trie>,
     waypoint_index: Option<usize>,
 }
 
+/// Represents a node used in the A* algorithm for pathfinding, with an F score and waypoint index.
 struct AStarNode {
     f_score: f32,
     waypoint_index: usize,
 }
 
+/// Represents a dataset of waypoints and geospatial data.
 pub struct Dataset {
     pub waypoints: Vec<Waypoint>,
     pub geohash_index: Trie,
@@ -44,7 +49,27 @@ impl PartialEq for Waypoint {
 impl Eq for Waypoint {}
 
 impl Waypoint {
-    /// Implements the Haversine formula to find the distance between self and another waypoint (in km)
+    /// Calculates and returns the great-circle distance between this waypoint
+    /// and a target waypoint in kilometers using the Haversine formula.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` - A reference to the target `Waypoint` to get the distance to.
+    ///
+    /// # Returns
+    ///
+    /// The great-circle distance in kilometers between this waypoint and the target waypoint.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let waypoint1 = Waypoint { lat: 37.7749, lon: -122.4194, label: String::from("A"), geohash: String::from("u4pruydq"), connections: Vec::new() };
+    /// let waypoint2 = Waypoint { lat: 34.0522, lon: -118.2437, label: String::from("B"), geohash: String::from("9q5x9p6y"), connections: Vec::new() };
+    ///
+    /// let distance_km = waypoint1.get_distance_to(&waypoint2);
+    ///
+    /// println!("Distance between waypoints: {} km", distance_km);
+    /// ```
     pub fn get_distance_to(&self, target: &Waypoint) -> f32 {
         const EARTH_RADIUS: f32 = 6378.137;
 
@@ -60,8 +85,33 @@ impl Waypoint {
         EARTH_RADIUS * c
     }
 
-    /// Generates a sequential character label based on waypoint's position 'n' in a set of size 'total_amt'
-    fn generate_label(mut n: usize, mut total_amt: usize) -> String {
+    /// Generates sequential labels to act as unique identifiers based on an
+    /// integer value and a total count. Will generate labels 'A' through 'Z'
+    /// first, then 'AA', 'AB', etc. through 'ZZ', then 'AAA'...
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - The integer value that represents the waypoint's index in the dataset
+    /// * `total_amt` - The total amount of waypoints for which labels are being generated.
+    ///
+    /// # Returns
+    ///
+    /// A string representing the generated label.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let n1 = 25;
+    /// let n2 = 27
+    /// let total_amt = 32;
+    ///
+    /// let label_1 = generate_label(n1, total_amt);
+    /// let label_2 = generate_label(n2, total_amt);
+    ///
+    /// println!("{}", label_1); // Example output: 'Z'
+    /// println!("{}", label_2); // Example output: 'AB'
+    /// ```
+    pub fn generate_label(mut n: usize, mut total_amt: usize) -> String {
         let mut label = String::new();
         let mut label_len = 1;
 
@@ -80,7 +130,13 @@ impl Waypoint {
         label.chars().rev().collect()
     }
 
-    /// Returns a String of the Waypoint's coordinates in Degrees/Minutes/Seconds (DMS) format
+    /// Converts the latitude and longitude coordinates of a waypoint into a
+    /// more readable Degree-Minute-Second (DMS) format string.
+    ///
+    /// # Returns
+    ///
+    /// A string representing the coordinates in DMS format.
+    /// For example, "37°45'30.00\"N, 122°25'12.00\"W".
     pub fn get_dms(&self) -> String {
         let lat = self.lat.abs(); // Convert (-) values to (+) for cleaner code; sign only relevant in determining direction
         let lat_degrees = lat.floor(); // The whole number portion of the value equals degrees
@@ -131,6 +187,11 @@ impl Ord for Connection {
 }
 
 impl Trie {
+    /// Initializes a new Trie node with no associated waypoint index and an empty set of child nodes.
+    ///
+    /// # Returns
+    ///
+    /// - `Trie`: A new Trie node for geohash indexing.
     fn new() -> Self {
         Trie {
             waypoint_index: None,
@@ -138,6 +199,13 @@ impl Trie {
         }
     }
 
+    /// Inserts a geohash and the corresponding waypoint index into the Trie. It
+    /// traverses the Trie structure, creating new nodes as needed to represent the geohash.
+    ///
+    /// # Parameters
+    ///
+    /// - `geohash`: A reference to the geohash to insert.
+    /// - `waypoint_index`: The index of the waypoint associated with the geohash.
     fn insert(&mut self, geohash: &str, waypoint_index: usize) {
         let mut current_node = self;
 
@@ -148,6 +216,16 @@ impl Trie {
         current_node.waypoint_index = Some(waypoint_index);
     }
 
+    /// Searches the Trie for waypoint indices whose geohash prefixes match the specified
+    /// prefix. It returns a vector of matching waypoint indices; empty if none.
+    ///
+    /// # Parameters
+    ///
+    /// - `prefix`: A reference to the geohash prefix to search for.
+    ///
+    /// # Returns
+    ///
+    /// - `Vec<usize>`: A vector containing waypoint indices matching the geohash prefix.
     fn get_all_with_prefix(&self, prefix: &str) -> Vec<usize> {
         let mut current = self;
         let mut found_waypoints = Vec::new();
@@ -164,6 +242,14 @@ impl Trie {
         found_waypoints
     }
 
+    /// Recursively traverses the Trie nodes, collecting waypoint indices from
+    /// nodes that have associated waypoints. It is used internally to implement
+    /// `get_all_with_prefix`.
+    ///
+    /// # Parameters
+    ///
+    /// - `node`: A reference to the Trie node to start collecting from.
+    /// - `waypoints`: A mutable reference to the vector where waypoint indices are collected.
     fn collect_waypoints_recursive(&self, node: &Trie, waypoints: &mut Vec<usize>) {
         if let Some(waypoint) = node.waypoint_index {
             waypoints.push(waypoint);
@@ -199,6 +285,12 @@ impl Ord for AStarNode {
 }
 
 impl Dataset {
+    /// Initializes a new `Dataset` struct with empty waypoint and geohash index containers.
+    /// Can store and manage geospatial data, such as waypoints and their connections.
+    ///
+    /// # Returns
+    ///
+    /// - `Dataset`: A new, empty dataset instance.
     pub fn new() -> Self {
         Dataset {
             waypoints: Vec::new(),
@@ -206,6 +298,22 @@ impl Dataset {
         }
     }
 
+    /// Randomly generates waypoints with random latitude and longitude values within the
+    /// specified range and assigns unique labels to each waypoint. It also calculates the
+    /// geohash for each waypoint and inserts it into a geohash index for quick spatial
+    /// lookups.
+    ///
+    /// # Parameters
+    ///
+    /// - `amt`: The number of waypoints to generate and add to the dataset.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    /// // The dataset now contains 10 randomly generated waypoints.
+    /// ```
     pub fn generate_waypoints(&mut self, amt: usize) {
         let now = SystemTime::now();
         let since_epoch = now.duration_since(UNIX_EPOCH).unwrap();
@@ -233,17 +341,98 @@ impl Dataset {
         }
     }
 
-    fn get_waypoint_index(&self, waypoint: &Waypoint) -> usize {
+    /// Searches for a waypoint with a matching label within the dataset and
+    /// returns `Some(index)` if found.
+    ///
+    /// # Parameters
+    ///
+    /// - `waypoint`: A reference to the waypoint whose index should be retrieved.
+    ///
+    /// # Returns
+    ///
+    /// - `Option<usize>`: The index of the waypoint within the dataset if found.
+    /// - `None`: If the waypoint isn't found, it returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    /// let waypoint_a = dataset.waypoints[0];
+    ///
+    /// match dataset.get_waypoint_index(&waypoint_a) {
+    ///     Some(index) => println!("Index of waypoint: {}", index),
+    ///     None => println!("Waypoint not found in the dataset."),
+    /// }
+    /// ```
+    fn get_waypoint_index(&self, waypoint: &Waypoint) -> Option<usize> {
         self.waypoints
             .iter()
             .position(|x| x.label == waypoint.label)
-            .unwrap()
     }
 
+    /// Queries the geohash index to retrieve all waypoint indices that share a common
+    /// geohash prefix with the specified geohash. It is used to find waypoints within the same
+    /// geohash cell or adjacent cells.
+    ///
+    /// # Parameters
+    ///
+    /// - `geohash`: A reference to the geohash prefix to search for.
+    ///
+    /// # Returns
+    ///
+    /// - `Vec<usize>`: A vector containing the indices of waypoints matching the geohash prefix.
+    /// Empty if none.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    ///
+    /// let geohash_prefix = "9t37";
+    /// let matching_indices = dataset.search_geohash(geohash_prefix);
+    ///
+    /// for index in matching_indices {
+    ///     println!("Matching Waypoint: {:?}", dataset.waypoints[index].label);
+    /// }
+    /// ```
     fn search_geohash(&self, geohash: &str) -> Vec<usize> {
         self.geohash_index.get_all_with_prefix(geohash)
     }
 
+    /// Calculates the K-nearest neighbors to a specified waypoint within the dataset
+    /// using a naive approach that iterates through all waypoints in the dataset,
+    /// calculates its distance to all other waypoints in the dataset, sorts them,
+    /// and returns the nearest K.
+    ///
+    /// # Parameters
+    ///
+    /// - `target`: A reference to the waypoint for which K-nearest neighbors are to be found.
+    /// - `k`: The number of nearest neighbors to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// - `Vec<Connection>`: A vector containing the K-nearest neighbor connections, sorted by distance.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    ///
+    /// let waypoint_a = &dataset.waypoints[0];
+    /// let k = 3;
+    /// let nearest_neighbors = dataset.get_knn_naive(waypoint_a, k);
+    ///
+    /// for neighbor in nearest_neighbors {
+    ///     println!(
+    ///         "Neighbor: {:?} - {:.2}km",
+    ///         dataset.waypoints[neighbor.waypoint_index].label,
+    ///         neighbor.distance
+    ///     );
+    /// }
+    /// ```
     pub fn get_knn_naive(&self, target: &Waypoint, k: usize) -> Vec<Connection> {
         let mut nearest_neighbors: Vec<Connection> = Vec::new();
 
@@ -261,11 +450,42 @@ impl Dataset {
         nearest_neighbors
     }
 
+    /// Calculates the K-nearest neighbors to a specified waypoint within the dataset based on
+    /// geohash proximity. Uses a priority queue (binary heap) to efficiently find the nearest
+    /// neighbors. It also considers neighboring geohash cells to handle edge cases.
+    ///
+    /// # Parameters
+    ///
+    /// - `waypoint`: A reference to the waypoint for which K-nearest neighbors are to be found.
+    /// - `k`: The number of nearest neighbors to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// - `Vec<Connection>`: A vector containing the K-nearest neighbor connections, sorted by distance.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    ///
+    /// let waypoint_a = &dataset.waypoints[0];
+    /// let k = 3;
+    /// let nearest_neighbors = dataset.get_knn_geohash(waypoint_a, k);
+    ///
+    /// for neighbor in nearest_neighbors {
+    ///     println!(
+    ///         "Neighbor: {:?} - {:.2}km",
+    ///         dataset.waypoints[neighbor.waypoint_index].label,
+    ///         neighbor.distance
+    ///     );
+    /// }
+    /// ```
     pub fn get_knn_geohash(&self, waypoint: &Waypoint, k: usize) -> Vec<Connection> {
         let mut geohash_to_search = waypoint.geohash.clone();
         let mut min_heap: BinaryHeap<Connection> = BinaryHeap::new();
         let mut visited: HashSet<usize> = HashSet::new();
-        visited.insert(self.get_waypoint_index(waypoint));
+        visited.insert(self.get_waypoint_index(waypoint).unwrap());
 
         while min_heap.len() < k {
             // Remove a level of precision and search the larger geohash cell for neighbors
@@ -299,6 +519,25 @@ impl Dataset {
         nearest_neighbors
     }
 
+    /// Iterates through each waypoint in the dataset and assigns connections to it based on
+    /// K-nearest neighbors, calculated using the `get_knn_geohash` method. Populates the
+    /// `connections` field of each waypoint with the calculated connections.
+    ///
+    /// # Parameters
+    ///
+    /// - `amt`: The number of nearest neighbors (K) to consider for each waypoint.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    ///
+    /// let k = 3;
+    /// dataset.assign_connections(k);
+    ///
+    /// // Each waypoint in the dataset now has connections to its K-nearest neighbors.
+    /// ```
     pub fn assign_connections(&mut self, amt: usize) {
         for i in 0..self.waypoints.len() {
             let connections = self.get_knn_geohash(&self.waypoints[i], amt);
@@ -306,12 +545,47 @@ impl Dataset {
         }
     }
 
-    /// Finds the shortest path between two waypoints using the A* algorithm.
+    /// Calculates the shortest route between a starting waypoint and a goal waypoint
+    /// using the A* (A-star) algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// - `start`: A reference to the starting waypoint.
+    /// - `goal`: A reference to the goal waypoint.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(Vec<usize>)`: If a valid route is found, it returns a vector of waypoint indices
+    ///   representing the shortest path from the `start` waypoint to the `goal` waypoint. The
+    ///   vector contains the indices of waypoints in the dataset's 'waypoints' field
+    ///   in the order they should be visited.
+    /// - `None`: If no valid route is found, it returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // Create a dataset with 10,000 waypoints, 5 connections each
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10000);
+    /// dataset.assign_connections(5);
+    ///
+    /// let start_waypoint = &dataset.waypoints[0];
+    /// let goal_waypoint = &dataset.waypoints[3];
+    ///
+    /// match dataset.get_shortest_route(start_waypoint, goal_waypoint) {
+    ///     Some(route) => {
+    ///        for index in route {
+    ///            print!("{}, ", dataset.waypoints[index].label);
+    ///         }
+    ///     }
+    ///     None => {println!("No valid route found.")}
+    /// }
+    /// ```
     pub fn get_shortest_route(&self, start: &Waypoint, goal: &Waypoint) -> Option<Vec<usize>> {
         let mut open_set: BinaryHeap<AStarNode> = BinaryHeap::new();
         let mut came_from: HashMap<usize, usize> = HashMap::new();
         let mut g_scores: HashMap<usize, f32> = HashMap::new();
-        let start_index = self.get_waypoint_index(&start);
+        let start_index = self.get_waypoint_index(&start).unwrap();
 
         // Initialize the open set and g_scores map with the starting point
         g_scores.insert(start_index, 0.0);

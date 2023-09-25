@@ -1,11 +1,3 @@
-#[derive(Clone, Copy, PartialEq)]
-pub enum Direction {
-    North,
-    East,
-    South,
-    West,
-}
-
 // Geohashes are represented using characters from a Base32 alphabet variant called the 'geohash alphabet' or '32ghs'
 const BASE_32GHS: &'static [u8; 32] = b"0123456789bcdefghjkmnpqrstuvwxyz";
 
@@ -31,6 +23,14 @@ const NEIGHBORS_D: [char; 32] = [
     '2', '3', '8', '9', '6', '7', 'd', 'e', 'b', 'c', '0', '1', 'f', 'g', '4', '5', 'k', 'm', 's',
     't', 'q', 'r', 'w', 'x', 'u', 'v', 'h', 'j', 'y', 'z', 'n', 'p',
 ];
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
 
 /// Encodes a geographic location specified by latitude and longitude into a
 /// geohash string with the given precision.
@@ -172,7 +172,8 @@ fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
     format!("{}{}", parent_geohash, adjacent_cell_char)
 }
 
-/// Finds and returns the geohash strings of all the cells surrounding a given geohash cell.
+/// Finds and returns the geohash strings of all the cells surrounding a given
+/// geohash cell.
 ///
 /// # Arguments
 ///
@@ -180,7 +181,7 @@ fn get_adjacent_cell(geohash: &str, direction: Direction) -> String {
 ///
 /// # Returns
 ///
-/// A vector of strings representing the geohash of the surrounding cells.
+/// A vector of strings representing the geohashes of the surrounding cells.
 ///
 /// # Example
 ///
