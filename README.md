@@ -1,2 +1,2 @@
 # zpath
-Generate and find shortest route between waypoints
+A lightweight, zero dependency Rust library to work with large sets of GPS coordinates and find the shortest routes between them.
