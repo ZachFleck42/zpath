@@ -1,10 +1,9 @@
 mod geohash;
-mod pseudorandom;
-
-use rand::Rng;
+mod pseudo_random;
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct Waypoint {
@@ -208,16 +207,17 @@ impl Dataset {
     }
 
     pub fn generate_waypoints(&mut self, amt: usize) {
-        let mut rng = rand::thread_rng();
+        let now = SystemTime::now();
+        let since_epoch = now.duration_since(UNIX_EPOCH).unwrap();
+        let seed = since_epoch.as_secs() ^ since_epoch.subsec_nanos() as u64;
+
+        let mut rng = pseudo_random::XorShiftRng::new(seed);
+        // let mut rng = pseudo_random::LcgRng::new(seed);
 
         for i in 0..amt {
             let label = Waypoint::generate_label(i, amt);
-            let lat = rng.gen_range(-90.0..=90.0);
-            let lon = rng.gen_range(-180.0..=180.0);
-            // let lat = pseudorandom::LcgRng::random_f32_in_range(-90.0, 90.0);
-            // let lon = pseudorandom::LcgRng::random_f32_in_range(-180.0, 180.0);
-            // let lat = pseudorandom::XorShiftRng::random_f32_in_range(-90.0, 90.0);
-            // let lon = pseudorandom::XorShiftRng::random_f32_in_range(-180.0, 180.0);
+            let lat = rng.random_f32_in_range(-90.0, 90.0);
+            let lon = rng.random_f32_in_range(-180.0, 180.0);
             let geohash = geohash::encode(lat, lon, 8);
 
             let waypoint = Waypoint {
