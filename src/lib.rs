@@ -312,7 +312,6 @@ impl Dataset {
     /// ```
     /// let mut dataset = Dataset::new();
     /// dataset.generate_waypoints(10);
-    /// // The dataset now contains 10 randomly generated waypoints.
     /// ```
     pub fn generate_waypoints(&mut self, amt: usize) {
         let now = SystemTime::now();
@@ -339,6 +338,55 @@ impl Dataset {
             self.geohash_index.insert(&geohash, i);
             self.waypoints.push(waypoint);
         }
+    }
+
+    /// Creates a new waypoint with the specified latitude and longitude inserts it into the dataset.
+    ///
+    /// # Arguments
+    ///
+    /// * `lat` - The latitude coordinate of the new waypoint in degrees.
+    /// * `lon` - The longitude coordinate of the new waypoint in degrees.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.add_new_waypoint(37.7749, -122.4194);
+    /// ```
+    pub fn add_new_waypoint(&mut self, lat: f32, lon: f32) -> usize {
+        let geohash = geohash::encode(lat, lon, 8);
+        let index = self.waypoints.len();
+
+        let waypoint = Waypoint {
+            label: Waypoint::generate_label(index, index + 1),
+            lat,
+            lon,
+            geohash: geohash.clone(),
+            connections: Vec::new(),
+        };
+
+        self.geohash_index.insert(&geohash, index);
+        self.waypoints.push(waypoint);
+
+        // If the dataset has already established connections, then assign some
+        // connections to the new waypoint
+        if self.waypoints[0].connections.len() > 0 {
+            let new_connections =
+                self.get_knn_geohash(&self.waypoints[index], self.waypoints[0].connections.len());
+
+            for connection in &new_connections {
+                self.waypoints[connection.waypoint_index]
+                    .connections
+                    .push(Connection {
+                        waypoint_index: index,
+                        distance: connection.distance,
+                    })
+            }
+
+            self.waypoints[index].connections.extend(new_connections);
+        }
+
+        index
     }
 
     /// Searches for a waypoint with a matching label within the dataset and
@@ -535,12 +583,34 @@ impl Dataset {
     ///
     /// let k = 3;
     /// dataset.assign_connections(k);
-    ///
-    /// // Each waypoint in the dataset now has connections to its K-nearest neighbors.
     /// ```
-    pub fn assign_connections(&mut self, amt: usize) {
+    pub fn assign_all_connections_geohash(&mut self, amt: usize) {
         for i in 0..self.waypoints.len() {
             let connections = self.get_knn_geohash(&self.waypoints[i], amt);
+            self.waypoints[i].connections.extend(connections);
+        }
+    }
+
+    /// Iterates through each waypoint in the dataset and assigns connections to it based on
+    /// K-nearest neighbors, calculated using the `get_knn_naive` method. Populates the
+    /// `connections` field of each waypoint with the calculated connections.
+    ///
+    /// # Parameters
+    ///
+    /// - `amt`: The number of nearest neighbors (K) to consider for each waypoint.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = Dataset::new();
+    /// dataset.generate_waypoints(10);
+    ///
+    /// let k = 3;
+    /// dataset.assign_connections(k);
+    /// ```
+    pub fn assign_all_connections_naive(&mut self, amt: usize) {
+        for i in 0..self.waypoints.len() {
+            let connections = self.get_knn_naive(&self.waypoints[i], amt);
             self.waypoints[i].connections.extend(connections);
         }
     }

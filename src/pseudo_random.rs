@@ -19,16 +19,16 @@ impl XorShiftRng {
         XorShiftRng { seed }
     }
 
-    /// Generates the next random 64-bit unsigned integer using the XorShift algorithm.
+    /// Generates the next random 32-bit unsigned integer using the XorShift algorithm.
     ///
     /// # Returns
     ///
-    /// A random 64-bit unsigned integer.
-    pub fn next_u32(&mut self) -> u64 {
+    /// A random 32-bit unsigned integer.
+    pub fn next_u32(&mut self) -> u32 {
         self.seed ^= self.seed << 11;
         self.seed ^= self.seed >> 21;
         self.seed ^= self.seed << 13;
-        self.seed
+        self.seed as u32
     }
 
     /// Generates a random 32-bit floating-point number within the specified range.

@@ -1,29 +1,33 @@
-use std::time::Instant;
-
 fn main() {
-    let number_of_points = 10000;
-    let number_of_neighbors = 5;
+    // Create a new, empty dataset
     let mut dataset = zpath::Dataset::new();
 
-    let start_time_0 = Instant::now();
-    dataset.generate_waypoints(number_of_points);
-    let end_time_0 = Instant::now();
+    // Define the number of waypoints to generate and how many connections each waypoint should have
+    let number_of_waypoints = 1000;
+    let number_of_connections = 5;
 
-    let start_time_1 = Instant::now();
-    dataset.assign_connections(number_of_neighbors);
-    let end_time_1 = Instant::now();
+    // Generate the waypoints and insert them into the dataset
+    dataset.generate_waypoints(number_of_waypoints);
 
-    let aaa = &dataset.waypoints[0];
-    let aab = &dataset.waypoints[1];
+    // Assign connections to all waypoints in the dataset.
+    // Can use either naive method or using geohashes and the datset's geohash index.
+    dataset.assign_all_connections_geohash(number_of_connections);
+    // dataset.assign_all_connections_naive(number_of_neighbors);
 
-    let start_time_2 = Instant::now();
-    let route = dataset.get_shortest_route(aaa, aab);
-    let end_time_2 = Instant::now();
+    // Add custom waypoints to the dataset whenever you'd like
+    let custom_waypoint_index = dataset.add_new_waypoint(37.7749, -122.4194);
 
-    println!();
+    // Find the shortest route between two waypoints
+    let waypoint_a = &dataset.waypoints[0];
+    let custom_waypoint = &dataset.waypoints[custom_waypoint_index];
+    let route = dataset.get_shortest_route(waypoint_a, custom_waypoint);
 
+    // Print the resulting route (if one was found)
     if route.is_some() {
-        print!("The shortest route from AAA to AAB is:");
+        print!(
+            "The shortest route from {} to {} is:",
+            waypoint_a.label, custom_waypoint.label
+        );
         let waypoints = &dataset.waypoints;
         let route = route.unwrap();
 
@@ -35,29 +39,6 @@ fn main() {
             }
         }
     } else {
-        print!("No route found");
+        print!("No route found was found.");
     }
-
-    println!();
-    println!();
-
-    println!(
-        "{} points generated in {:?}",
-        number_of_points,
-        end_time_0.duration_since(start_time_0)
-    );
-
-    println!(
-        "{} nearest-neighbors for all {} points found in {:?}",
-        number_of_neighbors,
-        number_of_points,
-        end_time_1.duration_since(start_time_1)
-    );
-
-    println!(
-        "Route found in {:?}",
-        end_time_2.duration_since(start_time_2)
-    );
-
-    println!();
 }
