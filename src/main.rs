@@ -1,4 +1,5 @@
 use std::time::Instant;
+
 fn main() {
     let number_of_points = 10000;
     let number_of_neighbors = 5;

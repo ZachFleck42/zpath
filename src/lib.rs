@@ -1,4 +1,5 @@
 mod geohash;
+mod pseudorandom;
 
 use rand::Rng;
 
@@ -213,6 +214,10 @@ impl Dataset {
             let label = Waypoint::generate_label(i, amt);
             let lat = rng.gen_range(-90.0..=90.0);
             let lon = rng.gen_range(-180.0..=180.0);
+            // let lat = pseudorandom::LcgRng::random_f32_in_range(-90.0, 90.0);
+            // let lon = pseudorandom::LcgRng::random_f32_in_range(-180.0, 180.0);
+            // let lat = pseudorandom::XorShiftRng::random_f32_in_range(-90.0, 90.0);
+            // let lon = pseudorandom::XorShiftRng::random_f32_in_range(-180.0, 180.0);
             let geohash = geohash::encode(lat, lon, 8);
 
             let waypoint = Waypoint {
