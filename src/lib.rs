@@ -111,23 +111,17 @@ impl Waypoint {
     /// println!("{}", label_1); // Example output: 'Z'
     /// println!("{}", label_2); // Example output: 'AB'
     /// ```
-    pub fn generate_label(mut n: usize, mut total_amt: usize) -> String {
-        let mut label = String::new();
-        let mut label_len = 1;
+    pub fn generate_label(n: usize) -> String {
+        let mut result = String::new();
+        let mut remaining = n + 1;
 
-        while total_amt > 26 {
-            total_amt /= 26;
-            label_len += 1;
+        while remaining > 0 {
+            let remainder = (remaining - 1) % 26;
+            result.push((b'A' + remainder as u8) as char);
+            remaining = (remaining - 1) / 26;
         }
 
-        for _ in 0..label_len {
-            let remainder = n % 26;
-            let char_value = (remainder as u8 + b'A') as char;
-            label.push(char_value);
-            n /= 26;
-        }
-
-        label.chars().rev().collect()
+        result.chars().rev().collect()
     }
 
     /// Converts the latitude and longitude coordinates of a waypoint into a
@@ -310,7 +304,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     /// ```
     pub fn generate_waypoints(&mut self, amt: usize) {
@@ -321,8 +315,10 @@ impl Dataset {
         let mut rng = pseudo_random::XorShiftRng::new(seed);
         // let mut rng = pseudo_random::LcgRng::new(seed);
 
+        let waypoints_length = self.waypoints.len();
+
         for i in 0..amt {
-            let label = Waypoint::generate_label(i, amt);
+            let label = Waypoint::generate_label(waypoints_length + i);
             let lat = rng.random_f32_in_range(-90.0, 90.0);
             let lon = rng.random_f32_in_range(-180.0, 180.0);
             let geohash = geohash::encode(lat, lon, 8);
@@ -350,7 +346,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.add_new_waypoint(37.7749, -122.4194);
     /// ```
     pub fn add_new_waypoint(&mut self, lat: f32, lon: f32) -> usize {
@@ -358,7 +354,7 @@ impl Dataset {
         let index = self.waypoints.len();
 
         let waypoint = Waypoint {
-            label: Waypoint::generate_label(index, index + 1),
+            label: Waypoint::generate_label(index),
             lat,
             lon,
             geohash: geohash.clone(),
@@ -404,7 +400,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     /// let waypoint_a = dataset.waypoints[0];
     ///
@@ -435,7 +431,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     ///
     /// let geohash_prefix = "9t37";
@@ -466,7 +462,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     ///
     /// let waypoint_a = &dataset.waypoints[0];
@@ -514,7 +510,7 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     ///
     /// let waypoint_a = &dataset.waypoints[0];
@@ -578,11 +574,12 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     ///
     /// let k = 3;
-    /// dataset.assign_connections(k);
+    /// dataset.assign_connections_geohash(k);
+    /// // All waypoints in dataset will now have 3 connections
     /// ```
     pub fn assign_all_connections_geohash(&mut self, amt: usize) {
         for i in 0..self.waypoints.len() {
@@ -602,11 +599,12 @@ impl Dataset {
     /// # Example
     ///
     /// ```
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10);
     ///
     /// let k = 3;
-    /// dataset.assign_connections(k);
+    /// dataset.assign_connections_naive(k);
+    /// // All waypoints in dataset will now have 3 connections
     /// ```
     pub fn assign_all_connections_naive(&mut self, amt: usize) {
         for i in 0..self.waypoints.len() {
@@ -635,7 +633,7 @@ impl Dataset {
     ///
     /// ```
     /// // Create a dataset with 10,000 waypoints, 5 connections each
-    /// let mut dataset = Dataset::new();
+    /// let mut dataset = zpath::Dataset::new();
     /// dataset.generate_waypoints(10000);
     /// dataset.assign_connections(5);
     ///
@@ -705,5 +703,62 @@ impl Dataset {
         }
 
         None
+    }
+
+    /// Prints details of a route between waypoints, including the waypoints' labels,
+    /// coordinates, and total route distance.
+    ///
+    /// # Arguments
+    ///
+    /// * `route` - An optional vector of waypoint indices representing the route.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut dataset = zpath::Dataset::new();
+    /// dataset.generate_waypoints(100);
+    /// dataset.assign_all_connections_geohash(3)
+    ///
+    /// let waypoint_a = &dataset.waypoints[0];
+    /// let waypoint_b = &dataset.waypoints[1];
+    ///
+    /// let route = dataset.get_shortest_route(waypoint_a, waypoint_b);
+    ///
+    /// dataset.print_route_details(route);
+    /// ```
+    pub fn print_route_details(&self, route: Option<Vec<usize>>) {
+        match route {
+            Some(route) => {
+                println!(
+                    "The shortest route between waypoints {} and {} is: ",
+                    self.waypoints[route[0]].label,
+                    self.waypoints[route[route.len() - 1]].label
+                );
+
+                let mut route_distance = 0.0;
+                for (i, &waypoint_index) in route.iter().enumerate() {
+                    let current_waypoint = &self.waypoints[waypoint_index];
+                    print!(
+                        "  {:2}. Waypoint {:3} at {}",
+                        i + 1,
+                        current_waypoint.label,
+                        current_waypoint.get_dms()
+                    );
+
+                    if i < route.len() - 1 {
+                        print!(", ");
+                        let next_waypoint = &self.waypoints[route[i + 1]];
+                        let distance = current_waypoint.get_distance_to(next_waypoint);
+                        route_distance += distance;
+                        println!("travel {:.2}km to", distance)
+                    }
+                }
+                println!();
+                println!("Total route distance: {}km", route_distance);
+            }
+            None => {
+                println!("No route was found.");
+            }
+        }
     }
 }
